@@ -25,7 +25,7 @@ def formatar_run(run, eh_capa, key):
         run.font.size = Pt(14)
         run.font.color.rgb = CINZA_ESCURO
 
-# --- MOTOR DE SUBSTITUIÇÃO ROBUSTO ---
+# --- MOTOR DE SUBSTITUIÇÃO ROBUSTO (AGORA ENTRA EM TABELAS) ---
 def substituir_texto_em_shape(shape, mapa, eh_capa):
     if hasattr(shape, "text_frame") and shape.text_frame:
         for paragraph in shape.text_frame.paragraphs:
@@ -48,27 +48,25 @@ def processar_pptx(template_file, mapa, atividades):
             # 2. SUBSTITUIÇÃO DENTRO DE TABELAS (Pág 7, 20, etc.)
             if shape.has_table:
                 tbl = shape.table
-                
-                # Loop para substituir variáveis dentro das células da tabela
                 for row in tbl.rows:
                     for cell in row.cells:
                         substituir_texto_em_shape(cell, mapa, eh_capa)
 
-                # 3. LÓGICA DO GANTT (Específica para a tabela 12 colunas)
-                # O cabeçalho é a linha 0, então começamos da linha 1
+                # 3. LÓGICA DO GANTT (Tabela de Avanço)
+                # Verifica se a tabela tem 12 ou mais colunas
                 if len(tbl.columns) >= 12:
-                    # Pintar as células de verde conforme os meses selecionados
                     for row_idx, atividade in enumerate(atividades):
-                        target_row = row_idx + 1 # Pula o header (mes 1, mes 2...)
+                        target_row = row_idx + 1 # Pula a primeira linha (header: mes 1, mes 2...)
                         if target_row < len(tbl.rows):
                             row = tbl.rows[target_row]
                             row.cells[0].text = atividade['nome']
-                            # Reset de cor e aplicação do verde
+                            # Aplica o preenchimento verde nos meses marcados
                             for m_idx in range(1, len(tbl.columns)):
                                 if m_idx in atividade['meses']:
                                     cell = row.cells[m_idx]
                                     cell.fill.solid()
-                                    cell.fill.foreground_color.rgb = VERDE_CPTO
+                                    # CORREÇÃO DO ERRO: fore_color ao invés de foreground_color
+                                    cell.fill.fore_color.rgb = VERDE_CPTO 
 
     output = io.BytesIO()
     prs.save(output)
@@ -76,8 +74,8 @@ def processar_pptx(template_file, mapa, atividades):
     return output
 
 # --- INTERFACE STREAMLIT ---
-st.set_page_config(page_title="Emissor CPTO v8.0", layout="wide")
-st.title("🎯 Emissor de Propostas Grupo Comportamento - v8.0")
+st.set_page_config(page_title="Emissor CPTO v8.1", layout="wide")
+st.title("🎯 Emissor de Propostas Grupo Comportamento - v8.1")
 
 with st.sidebar:
     st.header("📁 Template")
@@ -92,57 +90,59 @@ tab1, tab2, tab3, tab4 = st.tabs(["📄 Identificação", "👥 Público", "📅
 with tab1:
     col1, col2 = st.columns(2)
     with col1:
-        servico = st.selectbox("Serviço", ["Diagnóstico (DCS/Clima/DCMA)", "Mapeamento de Liderança (MPL)", "Riscos Psicossociais (RPS)", "Pulse", "Pontuais / Palestras"])
-        cliente = st.text_input("Empresa", value="Teste Cliente")
-        unidade = st.text_input("Unidade", value="São Paulo")
-        num_prop = st.text_input("Nº Proposta", value="001/2026")
+        servico = st.selectbox("Serviço Principal", ["Diagnóstico (DCS/Clima/DCMA)", "Mapeamento de Liderança (MPL)", "Riscos Psicossociais (RPS)", "Pulse", "Pontuais / Palestras"])
+        cliente = st.text_input("Nome da Empresa", value="Teste Cliente")
+        unidade = st.text_input("Unidade atendida", value="São Paulo")
+        num_prop = st.text_input("Nº da Proposta", value="001/2026")
     with col2:
         formato = st.selectbox("Formato", ["Híbrido", "Presencial", "Online"])
         idioma = st.selectbox("Idioma", ["Português", "Espanhol", "Inglês"])
-        prazo = st.text_input("Prazo", value="8 meses")
-        idas_presenciais = st.number_input("Nº de Idas Presenciais", min_value=0, value=2)
+        prazo = st.text_input("Prazo de Execução", value="8 meses")
+        idas_presenciais = st.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=2)
     
-    justificativa = st.text_area("Justificativa", value="Justificativa de teste para a proposta.")
-    objetivo = st.text_area("Objetivo", value="Objetivo principal do projeto de consultoria.")
+    justificativa = st.text_area("Justificativa Técnica")
+    objetivo = st.text_area("Objetivo do Projeto")
 
 with tab2:
     st.write("Preencha a população para a Tabela da Página 7:")
     c1, c2, c3 = st.columns(3)
-    n_pr = c1.number_input("N° Executivos", value=2)
-    n_exec = c2.number_input("N° Alta Liderança", value=5)
-    n_coord = c3.number_input("N° Coordenadores", value=10)
-    n_super = c1.number_input("N° Supervisores", value=15)
-    n_lid_total = n_pr + n_exec + n_coord + n_super
-    n_sec = c2.number_input("N° Segurança", value=3)
-    n_oper = c3.number_input("N° Operacionais", value=200)
-    n_col3 = c1.number_input("N° Terceiros", value=50)
-    n_lid3 = c2.number_input("N° Líderes Terceiros", value=5)
+    n_pr = c1.number_input("N° Executivos (Pres/VP/Dir)", value=0)
+    n_exec = c2.number_input("N° Alta Liderança (Gerentes)", value=0)
+    n_coord = c3.number_input("N° Coordenadores", value=0)
+    n_super = c1.number_input("N° Supervisores", value=0)
+    n_lid_extra = c2.number_input("Outros Líderes", value=0)
+    n_sec = c3.number_input("Equipe Segurança", value=0)
+    n_oper = c1.number_input("Colab. não líderes", value=0)
+    n_col3 = c2.number_input("Colab. Terceiros", value=0)
+    n_lid3 = c3.number_input("Líderes Terceiros", value=0)
     
+    n_lid_total = n_pr + n_exec + n_coord + n_super + n_lid_extra
     n_prop = n_lid_total + n_sec + n_oper
     n_p_terc = n_prop + n_col3 + n_lid3
 
 with tab3:
     st.write("Fases do Cronograma (Página 6):")
     atividades_lista = []
-    for i in range(6):
+    for i in range(10):
         ca, cm = st.columns([0.4, 0.6])
-        nome_at = ca.text_input(f"Atividade {i+1}", key=f"f_{i}")
-        meses_at = cm.multiselect(f"Meses", list(range(1, 13)), key=f"m_{i}")
+        nome_at = ca.text_input(f"Ação {i+1}", key=f"f_{i}")
+        meses_at = cm.multiselect(f"Meses de Atividade", list(range(1, 13)), key=f"m_{i}")
         if nome_at: atividades_lista.append({"nome": nome_at, "meses": meses_at})
 
 with tab4:
-    st.write("Relatórios e PTCs (Página 20):")
+    st.subheader("Relatórios e PTCs (Página 20)")
     cr1, cr2 = st.columns(2)
-    qtd_rel = cr1.number_input("Qtd Unidades com Relatório", value=2)
+    qtd_rel = cr1.number_input("Qtd de unidades com relatório (sem corporativo)", value=1)
     tem_corp = cr2.checkbox("Gerar Relatório Corporativo?", value=True)
     tot_rel = qtd_rel + (1 if tem_corp else 0)
-    tot_plan = st.number_input("Total de Planos (PTC)", value=1)
+    tot_plan = st.number_input("Total de PTCs a serem entregues", value=1)
     
-    ch_total = 144 # Exemplo base Lote 4
-    investimento = (ch_total * valor_hora) / (1 - imposto)
+    # Simulação de cálculo financeiro base
+    ch_simulada = 144
+    investimento = (ch_simulada * valor_hora) / (1 - imposto)
     st.metric("Investimento Total Estimado", f"R$ {investimento:,.2f}")
 
-if st.button("🚀 GERAR PROPOSTA FINAL"):
+if st.button("🚀 GERAR PROPOSTA PPTX"):
     if not template_upload:
         st.error("Suba o template na barra lateral!")
     else:
@@ -159,5 +159,5 @@ if st.button("🚀 GERAR PROPOSTA FINAL"):
         }
         
         pptx_io = processar_pptx(template_upload, mapa_final, atividades_lista)
-        st.success("✅ PowerPoint gerado com sucesso!")
-        st.download_button("⬇️ Baixar Arquivo", pptx_io, f"Proposta_{cliente}.pptx")
+        st.success("✅ Documento gerado com sucesso!")
+        st.download_button("⬇️ Baixar Proposta", pptx_io, f"Proposta_{cliente}.pptx")
