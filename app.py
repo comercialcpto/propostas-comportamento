@@ -2,6 +2,7 @@ import streamlit as st
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.util import Pt
+from pptx.enum.text import PP_ALIGN
 import io
 import datetime
 
@@ -25,7 +26,6 @@ def formatar_run(run, eh_capa, key):
         run.font.size = Pt(14)
         run.font.color.rgb = CINZA_ESCURO
 
-# --- MOTOR DE SUBSTITUIÇÃO ROBUSTO (AGORA ENTRA EM TABELAS) ---
 def substituir_texto_em_shape(shape, mapa, eh_capa):
     if hasattr(shape, "text_frame") and shape.text_frame:
         for paragraph in shape.text_frame.paragraphs:
@@ -40,32 +40,37 @@ def processar_pptx(template_file, mapa, atividades):
     
     for i, slide in enumerate(prs.slides):
         eh_capa = (i == 0)
-        
         for shape in slide.shapes:
-            # 1. SUBSTITUIÇÃO EM TEXTOS NORMAIS
             substituir_texto_em_shape(shape, mapa, eh_capa)
             
-            # 2. SUBSTITUIÇÃO DENTRO DE TABELAS (Pág 7, 20, etc.)
             if shape.has_table:
                 tbl = shape.table
                 for row in tbl.rows:
                     for cell in row.cells:
                         substituir_texto_em_shape(cell, mapa, eh_capa)
 
-                # 3. LÓGICA DO GANTT (Tabela de Avanço)
-                # Verifica se a tabela tem 12 ou mais colunas
+                # --- CORREÇÃO DO GANTT (Tabela de Avanço) ---
                 if len(tbl.columns) >= 12:
                     for row_idx, atividade in enumerate(atividades):
-                        target_row = row_idx + 1 # Pula a primeira linha (header: mes 1, mes 2...)
+                        target_row = row_idx + 1 
                         if target_row < len(tbl.rows):
                             row = tbl.rows[target_row]
-                            row.cells[0].text = atividade['nome']
-                            # Aplica o preenchimento verde nos meses marcados
+                            
+                            # Ajuste da Coluna de Ação (Fonte menor para não empurrar a tabela)
+                            cell_acao = row.cells[0]
+                            cell_acao.text = atividade['nome']
+                            if cell_acao.text_frame.paragraphs:
+                                p = cell_acao.text_frame.paragraphs[0]
+                                if p.runs:
+                                    run = p.runs[0]
+                                    run.font.size = Pt(10) # Fonte reduzida para compactação
+                                    run.font.name = "Calibri"
+                                    run.font.color.rgb = CINZA_ESCURO
+
                             for m_idx in range(1, len(tbl.columns)):
                                 if m_idx in atividade['meses']:
                                     cell = row.cells[m_idx]
                                     cell.fill.solid()
-                                    # CORREÇÃO DO ERRO: fore_color ao invés de foreground_color
                                     cell.fill.fore_color.rgb = VERDE_CPTO 
 
     output = io.BytesIO()
@@ -74,8 +79,8 @@ def processar_pptx(template_file, mapa, atividades):
     return output
 
 # --- INTERFACE STREAMLIT ---
-st.set_page_config(page_title="Emissor CPTO v8.1", layout="wide")
-st.title("🎯 Emissor de Propostas Grupo Comportamento - v8.1")
+st.set_page_config(page_title="Emissor CPTO v8.2", layout="wide")
+st.title("🎯 Emissor de Propostas Grupo Comportamento - v8.1") # Mantive o título para não confundir seu histórico
 
 with st.sidebar:
     st.header("📁 Template")
@@ -137,7 +142,6 @@ with tab4:
     tot_rel = qtd_rel + (1 if tem_corp else 0)
     tot_plan = st.number_input("Total de PTCs a serem entregues", value=1)
     
-    # Simulação de cálculo financeiro base
     ch_simulada = 144
     investimento = (ch_simulada * valor_hora) / (1 - imposto)
     st.metric("Investimento Total Estimado", f"R$ {investimento:,.2f}")
