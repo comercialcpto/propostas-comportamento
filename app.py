@@ -77,8 +77,8 @@ def processar_pptx(template_file, mapa, atividades):
     return output
 
 # --- INTERFACE ---
-st.set_page_config(page_title="Emissor CPTO v8.3", layout="wide")
-st.title("🚀 Emissor de Propostas Grupo Comportamento - v8.3")
+st.set_page_config(page_title="Emissor CPTO v8.4", layout="wide")
+st.title("🚀 Emissor de Propostas Grupo Comportamento - v8.4")
 
 with st.sidebar:
     st.header("📁 Template")
@@ -123,12 +123,10 @@ with tab2:
     n_col3 = ct1.number_input("N° Colab. Terceiros", value=0)
     n_lid3 = ct2.number_input("N° Líderes Terceiros", value=0)
     
-    # CÁLCULOS EM TEMPO REAL
     n_lid_total = n_pr + n_exec + n_coord + n_super + n_lid_extra
     n_prop = n_lid_total + n_sec + n_oper
     n_p_terc = n_prop + n_col3 + n_lid3
 
-    # --- CONTADOR EM TEMPO REAL (DASHBOARD) ---
     st.markdown("### 📊 Contador em Tempo Real")
     m1, m2, m3 = st.columns(3)
     m1.metric("Líderes Totais", n_lid_total)
@@ -150,7 +148,7 @@ with tab4:
     qtd_rel = cr1.number_input("Qtd de unidades com relatório individual", value=1)
     tem_corp = cr2.checkbox("Gerar Relatório Corporativo?", value=True)
     tot_rel = qtd_rel + (1 if tem_corp else 0)
-    tot_plan = st.number_input("Total de PTCs", value=1)
+    tot_plan = st.number_input("Total de PTCs a serem entregues", value=1)
     
     investimento = (144 * valor_hora) / (1 - imposto)
     st.metric("Investimento Estimado", f"R$ {investimento:,.2f}")
@@ -159,6 +157,35 @@ if st.button("🚀 GERAR PROPOSTA FINAL"):
     if not template_upload:
         st.error("Suba o template na barra lateral!")
     else:
+        # MAPA FINAL CORRIGIDO (Syntax Error resolvido)
         mapa_final = {
-            "{{CLIENTE}}": cliente, "{{UNIDADE}}": unidade, "{{NUM_PROP}}": num_prop,
+            "{{CLIENTE}}": cliente, 
+            "{{UNIDADE}}": unidade, 
+            "{{NUM_PROP}}": num_prop,
             "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
+            "{{JUSTIFICATIVA}}": justificativa, 
+            "{{OBJETIVO}}": objetivo,
+            "{{PUBLICO}}": str(n_p_terc), 
+            "{{PRAZO}}": prazo, 
+            "{{FORMATO}}": formato, 
+            "{{IDIOMA}}": idioma,
+            "{{N_PR}}": str(n_pr), 
+            "{{N_EXEC}}": str(n_exec), 
+            "{{N_COORD}}": str(n_coord), 
+            "{{N_SUPER}}": str(n_super),
+            "{{N_LID}}": str(n_lid_total), 
+            "{{N_SEC}}": str(n_sec), 
+            "{{N_OPER}}": str(n_oper),
+            "{{N_PROP}}": str(n_prop), 
+            "{{N_COL3}}": str(n_col3), 
+            "{{N_LID3}}": str(n_lid3),
+            "{{N_PTERC}}": str(n_p_terc), 
+            "{{IDAS}}": str(idas_presenciais),
+            "{{TOT_REL}}": str(tot_rel), 
+            "{{QTD_REL}}": str(qtd_rel), 
+            "{{TOT_PLAN}}": str(tot_plan)
+        }
+        
+        pptx_io = processar_pptx(template_upload, mapa_final, atividades_lista)
+        st.success("✅ Documento gerado com sucesso!")
+        st.download_button("⬇️ Baixar Proposta", pptx_io, f"Proposta_{cliente}.pptx")
