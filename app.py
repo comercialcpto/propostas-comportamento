@@ -1,97 +1,120 @@
 import streamlit as st
+from pptx import Presentation
+from pptx.dml.color import RGBColor
+import io
 import datetime
 
-# --- INTELIGÊNCIA DE NEGÓCIO ---
-def calcular_diagnostico_cpto(populacao):
-    if populacao <= 100: return 108
-    elif populacao <= 200: return 128
-    elif populacao <= 500: return 144
-    elif populacao <= 800: return 160
+# --- CONFIGURAÇÕES E LÓGICA ---
+def calcular_ch_pela_populacao(pop_total):
+    if pop_total <= 100: return 108
+    elif pop_total <= 200: return 128
+    elif pop_total <= 500: return 144
+    elif pop_total <= 800: return 160
     else: return 216
 
-def calcular_taxa_taxi(ch_total):
-    if ch_total <= 250: return 150.0
-    elif ch_total <= 500: return 280.0
-    else: return 420.0
-
 # --- INTERFACE ---
-st.set_page_config(page_title="Emissor CPTO v3.0", layout="wide")
-st.title("🚀 Emissor de Propostas Grupo Comportamento - v3.0")
-st.markdown("---")
+st.set_page_config(page_title="Emissor CPTO v4.5", layout="wide")
+st.title("🚀 Emissor de Propostas Grupo Comportamento - v4.5")
 
+# --- SIDEBAR FINANCEIRA ---
 with st.sidebar:
-    st.header("⚙️ Parâmetros Financeiros")
+    st.header("💰 Financeiro")
     valor_hora = st.number_input("Valor Hora (R$)", value=480.0)
-    entidade = st.selectbox("Faturamento:", ["Comportamento (20%)", "Escola (11%)"])
-    imposto_rate = 0.20 if "20%" in entidade else 0.11
+    entidade = st.selectbox("Imposto:", ["Comportamento (20%)", "Escola (11%)"])
+    imposto = 0.20 if "20%" in entidade else 0.11
 
-# --- FORMULÁRIO ---
-col1, col2 = st.columns(2)
+# --- ABAS DE PREENCHIMENTO ---
+tab1, tab2, tab3, tab4 = st.tabs(["📝 Identificação", "👥 Público-Alvo", "📅 Cronograma (Gantt)", "📊 Resultados"])
 
-with col1:
-    st.subheader("1. Identificação e Justificativa")
-    cliente = st.text_input("Nome da Empresa")
-    missao = st.text_area("Missão do Cliente")
-    dor = st.text_area("Dor/Cenário do Cliente")
-    servico = st.selectbox("Serviço", ["Diagnóstico (DCS/Clima)", "Liderança (MPL)", "RPS", "Pulse", "EHS Estratégico", "Pontuais"])
-
-with col2:
-    st.subheader("2. Dimensionamento e Logística")
-    ch_total = 0
-    if servico == "Diagnóstico (DCS/Clima)":
-        pop = st.number_input("População", min_value=1, value=100)
-        ch_total = calcular_diagnostico_cpto(pop)
-    elif servico == "Liderança (MPL)":
-        n_lideres = st.number_input("Nº de Líderes", value=10)
-        ch_total = (n_lideres * 6) + 20
-    elif servico == "RPS":
-        ch_total = st.radio("Escopo RPS", [1072, 1606])
-    elif servico == "Pulse": ch_total = 56
-    elif servico == "EHS Estratégico": ch_total = 112
-    else: ch_total = st.number_input("CH Manual", value=16)
-
-    st.markdown("---")
-    st.write("**Custos de Viagem por Ida:**")
-    n_idas = st.number_input("Número de Idas Presenciais", min_value=0, value=1)
-    val_aereo = st.number_input("Média Aéreo (R$)", value=1200.0)
-    val_hotel = st.number_input("Diária Hotel (R$)", value=350.0)
-    n_pernoites = st.number_input("Nº de Pernoites por Ida", value=4)
-
-# --- MOTOR DE CÁLCULO ---
-# 1. Consultoria
-custo_consultoria_bruto = ch_total * valor_hora
-investimento_cpto = custo_consultoria_bruto / (1 - imposto_rate)
-
-# 2. Logística (Regra do Lote 4)
-taxa_taxi = calcular_taxa_taxi(ch_total)
-# Cada ida tem: 2 taxis (casa/aero) + Alimentação (n_pernoites+1)
-custo_taxi_base = (taxa_taxi * 2) * n_idas
-custo_alimentacao = (120.0 * (n_pernoites + 1)) * n_idas
-
-# Opção 2: Tudo incluso (Aéreo + Hotel + Taxi + Almoço)
-custo_viagem_total = ((val_aereo) + (val_hotel * n_pernoites) + (taxa_taxi * 2) + (120.0 * (n_pernoites + 1))) * n_idas
-logistica_inclusa = custo_viagem_total / (1 - imposto_rate)
-
-# --- PAINEL DE RESULTADOS ---
-if st.button("🔥 GERAR ESTRATÉGIA COMERCIAL"):
-    st.markdown("---")
-    res1, res2 = st.columns(2)
+with tab1:
+    col1, col2 = st.columns(2)
+    with col1:
+        cliente = st.text_input("Nome da Empresa ({{CLIENTE}})")
+        unidade = st.text_input("Unidade ({{UNIDADE}})")
+        num_prop = st.text_input("Nº Proposta ({{NUM_PROP}})")
+    with col2:
+        idioma = st.selectbox("Idioma ({{IDIOMA}})", ["Português", "Espanhol", "Inglês"])
+        formato = st.selectbox("Formato ({{FORMATO}})", ["Híbrido", "Presencial", "Online"])
+        prazo = st.text_input("Prazo ({{PRAZO}})", "8 meses")
     
-    with res1:
-        st.success("### Opção 1: Reembolso")
-        st.write("Cliente paga aéreos/hotéis à parte ou via Nota de Débito.")
-        st.metric("Investimento", f"R$ {investimento_cpto:,.2f}")
-        st.caption(f"Incluso: Consultoria ({ch_total}h) + Táxi Base + Alimentação.")
+    justificativa = st.text_area("Justificativa ({{JUSTIFICATIVA}})")
+    objetivo = st.text_area("Objetivo ({{OBJETIVO}})")
 
-    with res2:
-        st.info("### Opção 2: Logística Inclusa")
-        st.write("Valor global com todas as despesas embutidas.")
-        st.metric("Investimento Total", f"R$ {(investimento_cpto + logistica_inclusa):,.2f}")
-        st.caption(f"Incluso: Consultoria + {n_idas} idas (Aéreo/Hotel/Alimentação/Táxis).")
+with tab2:
+    st.subheader("Detalhamento de Colaboradores")
+    c1, c2, c3 = st.columns(3)
+    n_pr = c1.number_input("Nº Executivos (Pres/VP/Dir)", value=0)
+    n_exec = c2.number_input("Nº Alta Liderança (Gerentes)", value=0)
+    n_coord = c3.number_input("Nº Coordenadores", value=0)
+    n_super = c1.number_input("Nº Supervisores", value=0)
+    n_lid = n_pr + n_exec + n_coord + n_super
+    n_sec = c2.number_input("Nº Equipe Segurança", value=0)
+    n_oper = c3.number_input("Nº Colaboradores não líderes", value=0)
+    
+    st.markdown("---")
+    n_col3 = c1.number_input("Nº Colaboradores Terceiros", value=0)
+    n_lid3 = c2.number_input("Nº Líderes Terceiros", value=0)
+    
+    # Cálculos Automáticos
+    n_prop = n_pr + n_exec + n_coord + n_super + n_sec + n_oper
+    n_p_terc = n_prop + n_col3 + n_lid3
+    
+    st.write(f"**Total Próprios ({{N_PROP}}):** {n_prop}")
+    st.write(f"**Total Geral ({{N_PTERC}}):** {n_p_terc}")
+
+with tab3:
+    st.subheader("Gantt 12x12 (Meses de Avanço)")
+    st.write("Defina as atividades e marque os meses (X) para pintar de verde no slide.")
+    
+    # Gerador de matriz 12x12 simplificado para a interface
+    cronograma_data = []
+    for i in range(5): # Exemplo com 5 linhas iniciais
+        ativ = st.text_input(f"Atividade {i+1}", key=f"at{i}")
+        meses = st.multiselect(f"Meses de execução - {ativ}", list(range(1, 13)), key=f"m{i}")
+        cronograma_data.append({"ativ": ativ, "meses": meses})
+
+with tab4:
+    # Lógica de relatórios
+    col_r1, col_r2 = st.columns(2)
+    qtd_rel = col_r1.number_input("Qtd de Unidades com relatório ({{QTD_REL}})", value=1)
+    tem_corp = col_r2.checkbox("Gerar Relatório Corporativo?")
+    tot_rel = qtd_rel + (1 if tem_corp else 0)
+    tot_plan = st.number_input("Total de PTCs ({{TOT_PLAN}})", value=1)
+
+    # Cálculo Financeiro
+    ch_base = calcular_ch_pela_populacao(n_p_terc)
+    investimento = (ch_base * valor_hora) / (1 - imposto)
 
     st.markdown("---")
-    st.subheader("📂 Documentação")
-    st.code(f"Nomenclatura: 2026_XXX_{cliente.replace(' ','_')}_{servico}")
+    st.metric("Investimento Estimado", f"R$ {investimento:,.2f}")
     
-    st.subheader("💡 Justificativa Técnica")
-    st.write(f"Para apoiar a {cliente} em sua missão de '{missao}', focaremos em {dor} através de {ch_total}h de consultoria especializada.")
+    if st.button("🚀 GERAR PPTX FINAL"):
+        # Dicionário de Mapeamento Completo
+        mapeamento = {
+            "{{CLIENTE}}": cliente,
+            "{{UNIDADE}}": unidade,
+            "{{NUM_PROP}}": num_prop,
+            "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
+            "{{JUSTIFICATIVA}}": justificativa,
+            "{{OBJETIVO}}": objetivo,
+            "{{PUBLICO}}": n_p_terc,
+            "{{PRAZO}}": prazo,
+            "{{FORMATO}}": formato,
+            "{{IDIOMA}}": idioma,
+            "{{N_PR}}": n_pr,
+            "{{N_EXEC}}": n_exec,
+            "{{N_COORD}}": n_coord,
+            "{{N_SUPER}}": n_super,
+            "{{N_LID}}": n_lid,
+            "{{N_SEC}}": n_sec,
+            "{{N_OPER}}": n_oper,
+            "{{N_PROP}}": n_prop,
+            "{{N_COL3}}": n_col3,
+            "{{N_LID3}}": n_lid3,
+            "{{N_PTERC}}": n_p_terc,
+            "{{TOT_REL}}": tot_rel,
+            "{{QTD_REL}}": qtd_rel,
+            "{{TOT_PLAN}}": tot_plan
+        }
+        st.success("Pronto para injetar no template!")
+        # AQUI ENTRARÁ A FUNÇÃO DE SUBSTITUIÇÃO QUANDO O ARQUIVO FOR SUBIDO
