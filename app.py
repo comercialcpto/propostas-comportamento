@@ -10,13 +10,12 @@ import datetime
 # 1. FUNÇÕES AUXILIARES E MATEMÁTICA
 # ==========================================
 VERDE_CPTO = RGBColor(0, 128, 0)
+CINZA_ESCURO = RGBColor(64, 64, 64)
 
 def formatar_moeda(valor):
-    """Formata valor float para o padrão brasileiro: R$ 1.234,56"""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def formatar_celula_tabela(cell, texto):
-    """Aplica a formatação rígida exigida para as tabelas financeiras"""
     cell.text = str(texto)
     for paragraph in cell.text_frame.paragraphs:
         paragraph.alignment = PP_ALIGN.CENTER
@@ -45,18 +44,14 @@ def valor_por_extenso(valor):
 
     inteiro = int(valor)
     if inteiro == 0: return "zero reais"
-    
     milhoes = inteiro // 1000000
     milhares = (inteiro % 1000000) // 1000
     resto = inteiro % 1000
     
     resultado = []
-    if milhoes > 0:
-        resultado.append(converter_trio(milhoes) + (" milhões" if milhoes > 1 else " milhão"))
-    if milhares > 0:
-        resultado.append(converter_trio(milhares) + " mil")
-    if resto > 0:
-        resultado.append(converter_trio(resto))
+    if milhoes > 0: resultado.append(converter_trio(milhoes) + (" milhões" if milhoes > 1 else " milhão"))
+    if milhares > 0: resultado.append(converter_trio(milhares) + " mil")
+    if resto > 0: resultado.append(converter_trio(resto))
         
     extenso_final = ", ".join(resultado).replace(", e", " e")
     return extenso_final.capitalize() + (" reais" if inteiro > 1 else " real")
@@ -66,10 +61,8 @@ def calcular_amortizacao(qtd_parcelas):
     pesos_ativos = pesos_base[:qtd_parcelas]
     soma = sum(pesos_ativos)
     percentuais = [round((p / soma) * 100) for p in pesos_ativos]
-    
     diferenca = 100 - sum(percentuais)
-    if diferenca != 0:
-        percentuais[0] += diferenca
+    if diferenca != 0: percentuais[0] += diferenca
     return percentuais
 
 # ==========================================
@@ -84,7 +77,19 @@ def remover_linha_tabela(table, row_idx):
     tr = table.rows[row_idx]._tr
     tr.getparent().remove(tr)
 
-def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=None):
+def remover_coluna_tabela(table, col_idx):
+    try:
+        tbl = table._tbl
+        grid = tbl.tblGrid
+        if col_idx < len(grid.gridCol_lst):
+            grid.remove(grid.gridCol_lst[col_idx])
+        for row in table.rows:
+            if col_idx < len(row._tr.tc_lst):
+                row._tr.remove(row._tr.tc_lst[col_idx])
+    except Exception:
+        pass
+
+def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=None, qtd_meses=12):
     prs = Presentation(template_file)
     slides_para_deletar = []
 
@@ -101,8 +106,7 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                 for paragraph in shape.text_frame.paragraphs:
                     for run in paragraph.runs:
                         for key, value in mapa.items():
-                            if key in run.text:
-                                run.text = run.text.replace(key, str(value))
+                            if key in run.text: run.text = run.text.replace(key, str(value))
             
             if shape.has_table:
                 tbl = shape.table
@@ -112,21 +116,62 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                             for p in cell.text_frame.paragraphs:
                                 for run in p.runs:
                                     for key, value in mapa.items():
-                                        if key in run.text:
-                                            run.text = run.text.replace(key, str(value))
+                                        if key in run.text: run.text = run.text.replace(key, str(value))
 
+                # --- MÁGICA DO GANTT (Limpeza e Auto-Fit) ---
                 if len(tbl.columns) >= 12 and len(atividades) > 0:
+                    
+                    # 1. Limpeza de Linhas Excedentes (de baixo para cima)
+                    linhas_deletar = []
+                    for row_idx in range(1, len(tbl.rows)):
+                        if row_idx > len(atividades):
+                            linhas_deletar.append(row_idx)
+                    for r_idx in reversed(linhas_deletar):
+                        remover_linha_tabela(tbl, r_idx)
+
+                    # 2. Limpeza de Colunas Excedentes (Meses não usados)
+                    colunas_deletar = []
+                    for col_idx in range(1, len(tbl.columns)):
+                        if col_idx > qtd_meses:
+                            colunas_deletar.append(col_idx)
+                    for c_idx in reversed(colunas_deletar):
+                        remover_coluna_tabela(tbl, c_idx)
+
+                    # 3. Centralizar Tabela no Slide
+                    try:
+                        largura_tabela = sum([col.width for col in tbl.columns])
+                        shape.left = int((prs.slide_width - largura_tabela) / 2)
+                    except: pass
+
+                    # 4. Preenchimento e Auto-Fit de Fonte
                     for row_idx, atividade in enumerate(atividades):
                         target_row = row_idx + 1 
                         if target_row < len(tbl.rows):
                             row = tbl.rows[target_row]
-                            row.cells[0].text = atividade['nome']
+                            cell = row.cells[0]
+                            cell.text = atividade['nome']
+                            
+                            # Auto-Fit Baseado no tamanho da string
+                            tamanho_str = len(atividade['nome'])
+                            fonte_tamanho = 12
+                            if tamanho_str > 60: fonte_tamanho = 8
+                            elif tamanho_str > 40: fonte_tamanho = 10
+                            elif tamanho_str > 25: fonte_tamanho = 11
+
+                            for p in cell.text_frame.paragraphs:
+                                for run in p.runs:
+                                    run.font.name = "Calibri"
+                                    run.font.color.rgb = CINZA_ESCURO
+                                    run.font.size = Pt(fonte_tamanho)
+
+                            # Pinta os meses
                             for m_idx in range(1, len(tbl.columns)):
                                 if m_idx in atividade['meses']:
-                                    cell = row.cells[m_idx]
-                                    cell.fill.solid()
-                                    cell.fill.fore_color.rgb = VERDE_CPTO
+                                    cell_mes = row.cells[m_idx]
+                                    cell_mes.fill.solid()
+                                    cell_mes.fill.fore_color.rgb = VERDE_CPTO
 
+                # --- TABELAS FINANCEIRAS (Comercial) ---
                 if tipo_doc == "Comercial" and dados_fin:
                     try:
                         cabecalho = tbl.rows[0].cells[0].text.strip().lower()
@@ -136,7 +181,6 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                             linhas_para_deletar = []
                             for idx in range(1, len(tbl.rows)):
                                 cell_text = tbl.rows[idx].cells[0].text.strip().lower()
-                                
                                 if "investimento total" in cell_text:
                                     formatar_celula_tabela(tbl.rows[idx].cells[1], formatar_moeda(dados_fin['total_op1']))
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(dados_fin['total_op2']))
@@ -146,7 +190,6 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(acoes[idx-1]['v2']))
                                 else:
                                     linhas_para_deletar.append(idx)
-                            
                             for idx in reversed(linhas_para_deletar):
                                 remover_linha_tabela(tbl, idx)
 
@@ -155,7 +198,6 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                             linhas_para_deletar = []
                             for idx in range(1, len(tbl.rows)):
                                 cell_text = tbl.rows[idx].cells[0].text.strip().lower()
-                                
                                 if "total" in cell_text and "investimento" not in cell_text:
                                     formatar_celula_tabela(tbl.rows[idx].cells[1], "100%")
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(dados_fin['total_op2']))
@@ -166,17 +208,13 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(val_calc))
                                 else:
                                     linhas_para_deletar.append(idx)
-                            
                             for idx in reversed(linhas_para_deletar):
                                 remover_linha_tabela(tbl, idx)
-                    except Exception as e:
-                        pass 
+                    except Exception: pass 
 
-        if deletar_este_slide:
-            slides_para_deletar.append(slide)
+        if deletar_este_slide: slides_para_deletar.append(slide)
 
-    for slide in slides_para_deletar:
-        deletar_slide(prs, slide)
+    for slide in slides_para_deletar: deletar_slide(prs, slide)
 
     output = io.BytesIO()
     prs.save(output)
@@ -184,9 +222,15 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
     return output
 
 # ==========================================
-# 3. INTERFACE DE USUÁRIO
+# 3. INTERFACE DE USUÁRIO E ESTADOS
 # ==========================================
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
+
+if 'tentou_gerar' not in st.session_state:
+    st.session_state.tentou_gerar = False
+
+def acionar_geracao():
+    st.session_state.tentou_gerar = True
 
 st.sidebar.title("🧭 Navegação")
 menu = st.sidebar.radio("Selecione o Módulo:", ["🏠 Início", "💰 Criar Precificação", "📊 Criar Apresentação"])
@@ -194,10 +238,12 @@ menu = st.sidebar.radio("Selecione o Módulo:", ["🏠 Início", "💰 Criar Pre
 if menu == "🏠 Início":
     st.title("Bem-vindo ao Sistema Comercial - Comportamento")
     st.write("Selecione um módulo no menu lateral para começar.")
+    st.session_state.tentou_gerar = False
 
 elif menu == "💰 Criar Precificação":
     st.title("💰 Módulo de Precificação")
-    st.info("🚧 Em construção. Aqui entrarão os cálculos baseados nas suas planilhas Excel.")
+    st.info("🚧 Em construção.")
+    st.session_state.tentou_gerar = False
 
 elif menu == "📊 Criar Apresentação":
     st.title("📊 Gerador de Propostas")
@@ -206,37 +252,67 @@ elif menu == "📊 Criar Apresentação":
     with st.sidebar:
         st.markdown("---")
         st.header("📁 Template Original")
-        template_upload = st.file_uploader(f"Suba o template .pptx ({tipo_apresentacao})", type="pptx")
+        template_upload = st.file_uploader(f"Suba o template ({tipo_apresentacao})", type="pptx")
+        if st.session_state.tentou_gerar and not template_upload:
+            st.error("Obrigatório subir o template.")
     
-    # --- VARIÁVEIS COMUNS ---
+    # Dicionário para guardar campos em branco
+    campos_vazios = []
+
     with st.expander("📍 1. Identificação Geral", expanded=True):
         c1, c2, c3 = st.columns(3)
         servico = c1.selectbox("Serviço Principal", ["Diagnóstico (DCS/Clima/DCMA)", "Mapeamento de Liderança (MPL)", "Riscos Psicossociais (RPS)", "Pulse", "Pontuais / Palestras"])
+        
         cliente = c2.text_input("Nome da Empresa ({{CLIENTE}})")
+        if st.session_state.tentou_gerar and not cliente: 
+            c2.error("Campo obrigatório!")
+            campos_vazios.append("Nome da Empresa")
+
         unidade = c3.text_input("Unidade ({{UNIDADE}})")
+        if st.session_state.tentou_gerar and not unidade: 
+            c3.error("Campo obrigatório!")
+            campos_vazios.append("Unidade")
         
         c4, c5, c6 = st.columns(3)
         num_prop = c4.text_input("Nº da Proposta ({{NUM_PROP}})")
-        escopo_tag = c5.text_input("Título do Escopo ({{ESCOPO}})", value="Encontro de Planejamento 2026")
+        if st.session_state.tentou_gerar and not num_prop: 
+            c4.error("Campo obrigatório!")
+            campos_vazios.append("Nº da Proposta")
+
+        escopo_tag = c5.text_input("Título do Escopo ({{ESCOPO}})")
+        if st.session_state.tentou_gerar and not escopo_tag: 
+            c5.error("Campo obrigatório!")
+            campos_vazios.append("Título do Escopo")
+
         prazo = c6.text_input("Prazo ({{PRAZO}})")
+        if st.session_state.tentou_gerar and not prazo: 
+            c6.error("Campo obrigatório!")
+            campos_vazios.append("Prazo")
         
         c7, c8, c9 = st.columns(3)
         formato = c7.selectbox("Formato ({{FORMATO}})", ["Híbrido", "Presencial", "Online"])
         
         idiomas_selecionados = c8.multiselect("Idioma ({{IDIOMA}})", ["Português", "Espanhol", "Inglês"], default=["Português"])
-        if len(idiomas_selecionados) == 1:
-            idioma_str = idiomas_selecionados[0]
-        elif len(idiomas_selecionados) == 2:
-            idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
-        elif len(idiomas_selecionados) > 2:
-            idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
+        if len(idiomas_selecionados) == 1: idioma_str = idiomas_selecionados[0]
+        elif len(idiomas_selecionados) == 2: idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
+        elif len(idiomas_selecionados) > 2: idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
         else:
             idioma_str = ""
+            if st.session_state.tentou_gerar:
+                c8.error("Selecione pelo menos um idioma!")
+                campos_vazios.append("Idioma")
         
         idas = c9.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=0)
         
         justificativa = st.text_area("Justificativa ({{JUSTIFICATIVA}})")
+        if st.session_state.tentou_gerar and not justificativa: 
+            st.error("A Justificativa é obrigatória!")
+            campos_vazios.append("Justificativa")
+
         objetivo = st.text_area("Objetivo ({{OBJETIVO}})")
+        if st.session_state.tentou_gerar and not objetivo: 
+            st.error("O Objetivo é obrigatório!")
+            campos_vazios.append("Objetivo")
 
     with st.expander("📅 2. Cronograma de Avanço (Gantt)"):
         cg1, cg2 = st.columns(2)
@@ -247,17 +323,18 @@ elif menu == "📊 Criar Apresentação":
         for i in range(qtd_fases):
             ca, cm = st.columns([0.4, 0.6])
             nome_at = ca.text_input(f"Nome da Fase {i+1}", key=f"f_{i}")
-            
             habilitar_meses = len(nome_at) >= 3
             texto_placeholder = "Meses" if habilitar_meses else "Digite o nome da fase para liberar"
-            
             meses_at = cm.multiselect(texto_placeholder, list(range(1, int(qtd_meses_projeto) + 1)), key=f"m_{i}", disabled=not habilitar_meses)
             
             if habilitar_meses and meses_at:
                 atividades_lista.append({"nome": nome_at, "meses": meses_at})
+            elif habilitar_meses and not meses_at and st.session_state.tentou_gerar:
+                cm.error("Selecione ao menos um mês ou apague a fase.")
+                campos_vazios.append(f"Meses da Fase {i+1}")
 
     # ==========================================
-    # LÓGICA: APRESENTAÇÃO TÉCNICA
+    # LÓGICA: APRESENTAÇÃO TÉCNICA E COMERCIAL
     # ==========================================
     if tipo_apresentacao == "Apresentação Técnica":
         with st.expander("👥 3. Detalhamento do Público e Relatórios", expanded=True):
@@ -289,8 +366,15 @@ elif menu == "📊 Criar Apresentação":
             tot_rel = qtd_rel + (1 if tem_corp else 0)
             tot_plan = cr3.number_input("Total de PTCs", min_value=0, value=1)
 
-        if st.button("🚀 GERAR PROPOSTA TÉCNICA"):
-            if template_upload:
+        st.button("🚀 VALIDAR E GERAR TÉCNICA", on_click=acionar_geracao, key="btn_tecnica")
+        
+        if st.session_state.tentou_gerar:
+            if not template_upload: campos_vazios.append("Upload do Template")
+            if len(atividades_lista) == 0: campos_vazios.append("Pelo menos 1 Fase do Cronograma")
+            
+            if len(campos_vazios) > 0:
+                st.error(f"⚠️ Atenção! Preencha os campos obrigatórios marcados em vermelho para prosseguir.")
+            else:
                 mapa = {
                     "{{SERVICO}}": servico, "{{CLIENTE}}": cliente, "{{UNIDADE}}": unidade, 
                     "{{NUM_PROP}}": num_prop, "{{ESCOPO}}": escopo_tag,
@@ -304,20 +388,16 @@ elif menu == "📊 Criar Apresentação":
                     "{{N_LID3}}": str(n_lid3), "{{N_PTERC}}": str(n_p_terc),
                     "{{TOT_REL}}": str(tot_rel), "{{QTD_REL}}": str(qtd_rel), "{{TOT_PLAN}}": str(tot_plan)
                 }
-                pptx_io = processar_apresentacao(template_upload, mapa, atividades_lista, "Técnica")
-                st.success("Técnica gerada com sucesso!")
+                pptx_io = processar_apresentacao(template_upload, mapa, atividades_lista, "Técnica", None, qtd_meses_projeto)
+                st.success("Técnica gerada com sucesso! Clique abaixo para baixar.")
                 st.download_button("⬇️ Baixar Documento", pptx_io, f"Tecnica_{cliente}.pptx")
-            else:
-                st.error("Suba o template!")
+                st.session_state.tentou_gerar = False # Reseta o estado após sucesso
 
-    # ==========================================
-    # LÓGICA: APRESENTAÇÃO COMERCIAL
-    # ==========================================
     elif tipo_apresentacao == "Apresentação Comercial":
         with st.expander("💰 3. Detalhamento de Investimento e Parcelas", expanded=True):
             modo_logistica = st.radio("Como a Logística será tratada?", ["Estimada (Soma +30% automático)", "Cotada (Informar manualmente)"])
             
-            st.write("**Fases de Investimento (Tabela):**")
+            st.write("**Fases de Investimento:**")
             qtd_acoes = st.number_input("Quantas Macro Ações?", min_value=1, value=3)
             
             acoes_fin = []
@@ -331,7 +411,6 @@ elif menu == "📊 Criar Apresentação":
                 
                 if modo_logistica == "Estimada (Soma +30% automático)":
                     v2 = v1 * 1.3
-                    # Escapando o $ para não bugar a caixa de info do Streamlit
                     ui_v2 = formatar_moeda(v2).replace("$", "\$")
                     cf3.info(f"Opção 2: {ui_v2}")
                 else:
@@ -341,9 +420,11 @@ elif menu == "📊 Criar Apresentação":
                     acoes_fin.append({'nome': n_acao, 'v1': v1, 'v2': v2})
                     total_op1 += v1
                     total_op2 += v2
+                elif st.session_state.tentou_gerar:
+                    cf1.error("Obrigatório nomear a ação ou remover quantidade.")
+                    campos_vazios.append(f"Nome da Ação {i+1}")
             
             st.markdown("---")
-            # Escapando o $ para garantir que ele apareça e não inicie uma fórmula matemática (LaTeX)
             ui_op1 = formatar_moeda(total_op1).replace("$", "\$")
             ui_op2 = formatar_moeda(total_op2).replace("$", "\$")
             st.markdown(f"**Total OP1:** {ui_op1} | **Total OP2:** {ui_op2}")
@@ -351,8 +432,16 @@ elif menu == "📊 Criar Apresentação":
             st.write("**Condições de Pagamento:**")
             qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
 
-        if st.button("🚀 GERAR PROPOSTA COMERCIAL"):
-            if template_upload:
+        st.button("🚀 VALIDAR E GERAR COMERCIAL", on_click=acionar_geracao, key="btn_comercial")
+        
+        if st.session_state.tentou_gerar:
+            if not template_upload: campos_vazios.append("Upload do Template")
+            if len(atividades_lista) == 0: campos_vazios.append("Pelo menos 1 Fase do Cronograma")
+            if len(acoes_fin) == 0: campos_vazios.append("Pelo menos 1 Ação Financeira")
+
+            if len(campos_vazios) > 0:
+                st.error(f"⚠️ Atenção! Preencha os campos obrigatórios marcados em vermelho para prosseguir.")
+            else:
                 mapa_comercial = {
                     "{{SERVICO}}": servico, "{{CLIENTE}}": cliente, "{{UNIDADE}}": unidade, 
                     "{{NUM_PROP}}": num_prop, "{{ESCOPO}}": escopo_tag,
@@ -376,8 +465,7 @@ elif menu == "📊 Criar Apresentação":
                     'parcelas': dist_parcelas
                 }
                 
-                pptx_io = processar_apresentacao(template_upload, mapa_comercial, atividades_lista, "Comercial", dados_financeiros)
-                st.success("Comercial gerada com sucesso!")
+                pptx_io = processar_apresentacao(template_upload, mapa_comercial, atividades_lista, "Comercial", dados_financeiros, qtd_meses_projeto)
+                st.success("Comercial gerada com sucesso! Clique abaixo para baixar.")
                 st.download_button("⬇️ Baixar Documento", pptx_io, f"Comercial_{cliente}.pptx")
-            else:
-                st.error("Suba o template!")
+                st.session_state.tentou_gerar = False # Reseta o estado após sucesso
