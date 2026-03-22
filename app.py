@@ -92,13 +92,11 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
         deletar_este_slide = False
         
         for shape in slide.shapes:
-            # 1. Faxineiro de Slides "Para DCS"
             if hasattr(shape, "text") and "Para DCS" in shape.text:
                 if mapa.get("{{SERVICO}}", "") != "Diagnóstico (DCS/Clima/DCMA)":
                     deletar_este_slide = True
                     break 
 
-            # 2. Substituição de Texto Normal (Preservando a formatação do Template)
             if hasattr(shape, "text_frame") and shape.text_frame:
                 for paragraph in shape.text_frame.paragraphs:
                     for run in paragraph.runs:
@@ -106,10 +104,8 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                             if key in run.text:
                                 run.text = run.text.replace(key, str(value))
             
-            # 3. Tratamento de Tabelas
             if shape.has_table:
                 tbl = shape.table
-                # Textos dentro da tabela (Substituição normal de tags preservando formatação)
                 for row in tbl.rows:
                     for cell in row.cells:
                         if cell.text_frame:
@@ -119,7 +115,6 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                         if key in run.text:
                                             run.text = run.text.replace(key, str(value))
 
-                # Gantt (Tabelas de Avanço)
                 if len(tbl.columns) >= 12 and len(atividades) > 0:
                     for row_idx, atividade in enumerate(atividades):
                         target_row = row_idx + 1 
@@ -132,64 +127,50 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     cell.fill.solid()
                                     cell.fill.fore_color.rgb = VERDE_CPTO
 
-                # Tabela Financeira Comercial (Somente se dados_fin existir)
                 if tipo_doc == "Comercial" and dados_fin:
                     try:
                         cabecalho = tbl.rows[0].cells[0].text.strip().lower()
                         
-                        # Tabela 1: Macro Ações
                         if "macro" in cabecalho:
                             acoes = dados_fin['acoes']
                             linhas_para_deletar = []
                             for idx in range(1, len(tbl.rows)):
                                 cell_text = tbl.rows[idx].cells[0].text.strip().lower()
                                 
-                                # Verifica se chegou na linha de Total
                                 if "investimento total" in cell_text:
                                     formatar_celula_tabela(tbl.rows[idx].cells[1], formatar_moeda(dados_fin['total_op1']))
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(dados_fin['total_op2']))
-                                
-                                # Preenche as ações criadas
                                 elif idx <= len(acoes):
                                     formatar_celula_tabela(tbl.rows[idx].cells[0], acoes[idx-1]['nome'])
                                     formatar_celula_tabela(tbl.rows[idx].cells[1], formatar_moeda(acoes[idx-1]['v1']))
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(acoes[idx-1]['v2']))
-                                
-                                # Se sobrar linha em branco antes do total, marca para deletar
                                 else:
                                     linhas_para_deletar.append(idx)
                             
-                            # Deleta de baixo para cima para não quebrar os índices
                             for idx in reversed(linhas_para_deletar):
                                 remover_linha_tabela(tbl, idx)
 
-                        # Tabela 2: Faturamentos (Parcelas)
                         elif "meses" in cabecalho:
                             parcelas = dados_fin['parcelas']
                             linhas_para_deletar = []
                             for idx in range(1, len(tbl.rows)):
                                 cell_text = tbl.rows[idx].cells[0].text.strip().lower()
                                 
-                                # Verifica se chegou na linha de Total
                                 if "total" in cell_text and "investimento" not in cell_text:
                                     formatar_celula_tabela(tbl.rows[idx].cells[1], "100%")
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(dados_fin['total_op2']))
-                                
-                                # Preenche as parcelas
                                 elif idx <= len(parcelas):
                                     formatar_celula_tabela(tbl.rows[idx].cells[0], f"M{idx}")
                                     formatar_celula_tabela(tbl.rows[idx].cells[1], f"{parcelas[idx-1]}%")
                                     val_calc = dados_fin['total_op2'] * (parcelas[idx-1] / 100)
                                     formatar_celula_tabela(tbl.rows[idx].cells[2], formatar_moeda(val_calc))
-                                
-                                # Se sobrar linha em branco antes do total, deleta
                                 else:
                                     linhas_para_deletar.append(idx)
                             
                             for idx in reversed(linhas_para_deletar):
                                 remover_linha_tabela(tbl, idx)
                     except Exception as e:
-                        pass # Proteção contra formatações fora do padrão da tabela
+                        pass 
 
         if deletar_este_slide:
             slides_para_deletar.append(slide)
@@ -242,22 +223,38 @@ elif menu == "📊 Criar Apresentação":
         c7, c8, c9 = st.columns(3)
         formato = c7.selectbox("Formato ({{FORMATO}})", ["Híbrido", "Presencial", "Online"])
         
-        # Correção 1: Idioma como Multiselect (com junção por vírgula)
         idiomas_selecionados = c8.multiselect("Idioma ({{IDIOMA}})", ["Português", "Espanhol", "Inglês"], default=["Português"])
-        idioma_str = ", ".join(idiomas_selecionados)
+        if len(idiomas_selecionados) == 1:
+            idioma_str = idiomas_selecionados[0]
+        elif len(idiomas_selecionados) == 2:
+            idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
+        elif len(idiomas_selecionados) > 2:
+            idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
+        else:
+            idioma_str = ""
         
-        idas = c9.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0)
+        idas = c9.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=0)
         
         justificativa = st.text_area("Justificativa ({{JUSTIFICATIVA}})")
         objetivo = st.text_area("Objetivo ({{OBJETIVO}})")
 
     with st.expander("📅 2. Cronograma de Avanço (Gantt)"):
+        cg1, cg2 = st.columns(2)
+        qtd_fases = cg1.number_input("Quantas Fases?", min_value=1, value=5)
+        qtd_meses_projeto = cg2.number_input("Duração total do projeto (meses)", min_value=1, value=12)
+        
         atividades_lista = []
-        for i in range(10):
+        for i in range(qtd_fases):
             ca, cm = st.columns([0.4, 0.6])
-            nome_at = ca.text_input(f"Fase {i+1}", key=f"f_{i}")
-            meses_at = cm.multiselect("Meses", list(range(1, 13)), key=f"m_{i}")
-            if nome_at: atividades_lista.append({"nome": nome_at, "meses": meses_at})
+            nome_at = ca.text_input(f"Nome da Fase {i+1}", key=f"f_{i}")
+            
+            habilitar_meses = len(nome_at) >= 3
+            texto_placeholder = "Meses" if habilitar_meses else "Digite o nome da fase para liberar"
+            
+            meses_at = cm.multiselect(texto_placeholder, list(range(1, int(qtd_meses_projeto) + 1)), key=f"m_{i}", disabled=not habilitar_meses)
+            
+            if habilitar_meses and meses_at:
+                atividades_lista.append({"nome": nome_at, "meses": meses_at})
 
     # ==========================================
     # LÓGICA: APRESENTAÇÃO TÉCNICA
@@ -265,21 +262,20 @@ elif menu == "📊 Criar Apresentação":
     if tipo_apresentacao == "Apresentação Técnica":
         with st.expander("👥 3. Detalhamento do Público e Relatórios", expanded=True):
             cp1, cp2, cp3 = st.columns(3)
-            n_pr = cp1.number_input("Executivos", value=0)
-            n_exec = cp2.number_input("Alta Liderança", value=0)
-            n_coord = cp3.number_input("Coordenadores", value=0)
-            n_super = cp1.number_input("Supervisores", value=0)
-            n_lid_extra = cp2.number_input("Outros Líderes", value=0)
-            n_sec = cp3.number_input("Segurança", value=0)
-            n_oper = cp1.number_input("Operacional", value=0)
-            n_col3 = cp2.number_input("Terceiros", value=0)
-            n_lid3 = cp3.number_input("Líderes Terc.", value=0)
+            n_pr = cp1.number_input("Executivos", min_value=0, value=0)
+            n_exec = cp2.number_input("Alta Liderança", min_value=0, value=0)
+            n_coord = cp3.number_input("Coordenadores", min_value=0, value=0)
+            n_super = cp1.number_input("Supervisores", min_value=0, value=0)
+            n_lid_extra = cp2.number_input("Outros Líderes", min_value=0, value=0)
+            n_sec = cp3.number_input("Segurança", min_value=0, value=0)
+            n_oper = cp1.number_input("Operacional", min_value=0, value=0)
+            n_col3 = cp2.number_input("Terceiros", min_value=0, value=0)
+            n_lid3 = cp3.number_input("Líderes Terc.", min_value=0, value=0)
             
             n_lid_total = n_pr + n_exec + n_coord + n_super + n_lid_extra
             n_prop = n_lid_total + n_sec + n_oper
             n_p_terc = n_prop + n_col3 + n_lid3
 
-            # Correção 2: O Retorno do Contador em Tempo Real!
             st.markdown("### 📊 Contador de População (Ao Vivo)")
             m1, m2, m3 = st.columns(3)
             m1.metric("Líderes Totais", n_lid_total)
@@ -288,10 +284,10 @@ elif menu == "📊 Criar Apresentação":
 
             st.write("---")
             cr1, cr2, cr3 = st.columns(3)
-            qtd_rel = cr1.number_input("Qtd de Unidades com Relatório", value=1)
+            qtd_rel = cr1.number_input("Qtd de Unidades com Relatório", min_value=0, value=1)
             tem_corp = cr2.checkbox("Relatório Corporativo?")
             tot_rel = qtd_rel + (1 if tem_corp else 0)
-            tot_plan = cr3.number_input("Total de PTCs", value=1)
+            tot_plan = cr3.number_input("Total de PTCs", min_value=0, value=1)
 
         if st.button("🚀 GERAR PROPOSTA TÉCNICA"):
             if template_upload:
@@ -331,13 +327,15 @@ elif menu == "📊 Criar Apresentação":
             for i in range(qtd_acoes):
                 cf1, cf2, cf3 = st.columns(3)
                 n_acao = cf1.text_input(f"Ação {i+1}", key=f"ac_n_{i}")
-                v1 = cf2.number_input(f"Valor Opção 1 (R$)", key=f"ac_v1_{i}", value=0.0)
+                v1 = cf2.number_input(f"Valor Opção 1 (R$)", min_value=0.0, key=f"ac_v1_{i}", value=0.0)
                 
                 if modo_logistica == "Estimada (Soma +30% automático)":
                     v2 = v1 * 1.3
-                    cf3.info(f"Opção 2: {formatar_moeda(v2)}")
+                    # Escapando o $ para não bugar a caixa de info do Streamlit
+                    ui_v2 = formatar_moeda(v2).replace("$", "\$")
+                    cf3.info(f"Opção 2: {ui_v2}")
                 else:
-                    v2 = cf3.number_input(f"Valor Opção 2 (R$)", key=f"ac_v2_{i}", value=0.0)
+                    v2 = cf3.number_input(f"Valor Opção 2 (R$)", min_value=0.0, key=f"ac_v2_{i}", value=0.0)
                 
                 if n_acao:
                     acoes_fin.append({'nome': n_acao, 'v1': v1, 'v2': v2})
@@ -345,8 +343,10 @@ elif menu == "📊 Criar Apresentação":
                     total_op2 += v2
             
             st.markdown("---")
-            # Correção 3: Exibição do Total em Tela formatado perfeitamente
-            st.markdown(f"**Total OP1:** {formatar_moeda(total_op1)} | **Total OP2:** {formatar_moeda(total_op2)}")
+            # Escapando o $ para garantir que ele apareça e não inicie uma fórmula matemática (LaTeX)
+            ui_op1 = formatar_moeda(total_op1).replace("$", "\$")
+            ui_op2 = formatar_moeda(total_op2).replace("$", "\$")
+            st.markdown(f"**Total OP1:** {ui_op1} | **Total OP2:** {ui_op2}")
             
             st.write("**Condições de Pagamento:**")
             qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
