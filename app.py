@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+import math
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.util import Pt
@@ -9,7 +11,6 @@ import datetime
 # ==========================================
 # 1. FUNÇÕES AUXILIARES E MATEMÁTICA
 # ==========================================
-# Nova Cor Oficial da Comportamento (Azul-petróleo escuro / Teal)
 VERDE_CPTO = RGBColor(0, 153, 116) 
 CINZA_ESCURO = RGBColor(64, 64, 64)
 
@@ -56,6 +57,13 @@ def valor_por_extenso(valor):
         
     extenso_final = ", ".join(resultado).replace(", e", " e")
     return extenso_final.capitalize() + (" reais" if inteiro > 1 else " real")
+
+# --- MOTOR ESTATÍSTICO DCS ---
+def calcular_amostra(N, margem_erro, proporcao, z=1.96):
+    if N <= 0: return 0
+    numerador = N * (z**2) * proporcao * (1 - proporcao)
+    denominador = (margem_erro**2) * (N - 1) + (z**2) * proporcao * (1 - proporcao)
+    return math.ceil(numerador / denominador)
 
 def calcular_amortizacao(qtd_parcelas):
     pesos_base = [20, 20, 10, 10] + [5] * 30
@@ -120,10 +128,8 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     for key, value in mapa.items():
                                         if key in run.text: run.text = run.text.replace(key, str(value))
 
-                # --- MÁGICA DO GANTT (Limpeza e Auto-Fit) ---
+                # GANTT
                 if len(tbl.columns) >= 12 and len(atividades) > 0:
-                    
-                    # 1. Calcular Centralização ANTES de deletar (se colunas sobrarem)
                     colunas_para_deletar = list(range(qtd_meses + 1, len(tbl.columns)))
                     try:
                         largura_original = shape.width
@@ -132,16 +138,13 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                         shape.left = int((prs.slide_width - nova_largura) / 2)
                     except Exception: pass
 
-                    # 2. Deletar Colunas 
                     for c_idx in reversed(colunas_para_deletar):
                         remover_coluna_tabela(tbl, c_idx)
 
-                    # 3. Deletar Linhas Excedentes 
                     linhas_deletar = list(range(len(atividades) + 1, len(tbl.rows)))
                     for r_idx in reversed(linhas_deletar):
                         remover_linha_tabela(tbl, r_idx)
 
-                    # 4. Preenchimento e Auto-Fit
                     for row_idx, atividade in enumerate(atividades):
                         target_row = row_idx + 1 
                         if target_row < len(tbl.rows):
@@ -163,14 +166,13 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     run.font.size = Pt(fonte_tamanho)
                                     run.font.color.rgb = CINZA_ESCURO
 
-                            # Pinta os meses com a nova Cor Oficial
                             for m_idx in range(1, len(tbl.columns)):
                                 if m_idx in atividade['meses']:
                                     cell_mes = row.cells[m_idx]
                                     cell_mes.fill.solid()
                                     cell_mes.fill.fore_color.rgb = VERDE_CPTO
 
-                # --- TABELAS FINANCEIRAS (Comercial) ---
+                # TABELAS FINANCEIRAS
                 if tipo_doc == "Comercial" and dados_fin:
                     try:
                         cabecalho = tbl.rows[0].cells[0].text.strip().lower()
@@ -225,29 +227,109 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
 # ==========================================
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
 
-if "pptx_gerado" not in st.session_state:
-    st.session_state.pptx_gerado = None
-if "nome_arquivo" not in st.session_state:
-    st.session_state.nome_arquivo = ""
-if 'tentou_gerar' not in st.session_state:
-    st.session_state.tentou_gerar = False
+if "pptx_gerado" not in st.session_state: st.session_state.pptx_gerado = None
+if "nome_arquivo" not in st.session_state: st.session_state.nome_arquivo = ""
+if 'tentou_gerar' not in st.session_state: st.session_state.tentou_gerar = False
+
+if 'unidades_dcs' not in st.session_state:
+    st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
 
 def acionar_geracao():
     st.session_state.tentou_gerar = True
 
+def adicionar_unidade():
+    novo_id = len(st.session_state.unidades_dcs)
+    st.session_state.unidades_dcs.append({"id": novo_id, "nome": f"Nova Unidade {novo_id+1}", "pop_total": 0, "lideres": 0})
+
+def remover_unidade(id_remover):
+    if len(st.session_state.unidades_dcs) > 1:
+        st.session_state.unidades_dcs = [u for u in st.session_state.unidades_dcs if u['id'] != id_remover]
+
 st.sidebar.title("🧭 Navegação")
 menu = st.sidebar.radio("Selecione o Módulo:", ["🏠 Início", "💰 Criar Precificação", "📊 Criar Apresentação"])
 
+# ==========================================
+# MÓDULO 1: INÍCIO
+# ==========================================
 if menu == "🏠 Início":
     st.title("Bem-vindo ao Sistema Comercial - Comportamento")
     st.write("Selecione um módulo no menu lateral para começar.")
     st.session_state.tentou_gerar = False
 
+# ==========================================
+# MÓDULO 2: PRECIFICAÇÃO (NOVO)
+# ==========================================
 elif menu == "💰 Criar Precificação":
-    st.title("💰 Módulo de Precificação")
-    st.info("🚧 Em construção.")
-    st.session_state.tentou_gerar = False
+    st.title("💰 Motor de Precificação")
+    servico_prec = st.selectbox("Selecione o Serviço para Precificar:", ["Diagnóstico (DCS)", "Mapeamento de Liderança (MPL) - Em breve"])
+    
+    if servico_prec == "Diagnóstico (DCS)":
+        st.markdown("### 📊 1. Cadastro de População e Unidades")
+        st.info("Insira as áreas ou unidades. O sistema fará o cálculo da amostra usando 95% de confiança.")
+        
+        for i, und in enumerate(st.session_state.unidades_dcs):
+            c1, c2, c3, c4 = st.columns([0.4, 0.2, 0.2, 0.2])
+            und['nome'] = c1.text_input(f"Nome da Unidade/Área", value=und['nome'], key=f"nome_{und['id']}")
+            und['pop_total'] = c2.number_input("População Total", min_value=0, value=und['pop_total'], key=f"pop_{und['id']}")
+            und['lideres'] = c3.number_input("Total de Líderes", min_value=0, value=und['lideres'], key=f"lid_{und['id']}")
+            
+            if len(st.session_state.unidades_dcs) > 1:
+                if c4.button("🗑️ Remover", key=f"rem_{und['id']}"):
+                    remover_unidade(und['id'])
+                    st.rerun()
 
+        st.button("➕ Adicionar Unidade / Área", on_click=adicionar_unidade)
+        
+        st.markdown("---")
+        st.markdown("### ⚙️ 2. Motor Estatístico e Engajamento de Horas")
+        
+        total_horas_campo = 0
+        total_amostra = 0
+        
+        for und in st.session_state.unidades_dcs:
+            if und['pop_total'] > 0:
+                amostra_total = calcular_amostra(und['pop_total'], margem_erro=0.08, proporcao=0.5)
+                amostra_lideres = calcular_amostra(und['lideres'], margem_erro=0.05, proporcao=0.8)
+                
+                turmas_hm = math.ceil(amostra_lideres / 12)
+                turmas_foco = math.ceil((amostra_total - amostra_lideres) / 12) if amostra_total > amostra_lideres else 0
+                horas_hm = turmas_hm * 2
+                horas_foco = turmas_foco * 2
+                
+                entrevistas = max(0, amostra_lideres - (turmas_hm * 12)) if amostra_lideres > 0 else 8
+                horas_entrevistas = entrevistas * 1.5
+                
+                total_horas_unidade = horas_hm + horas_foco + horas_entrevistas
+                total_horas_campo += total_horas_unidade
+                total_amostra += amostra_total
+                
+                with st.expander(f"📌 Resultados: {und['nome']} (Amostra: {amostra_total} pessoas)", expanded=True):
+                    rc1, rc2, rc3 = st.columns(3)
+                    rc1.metric("Amostra Total (Het. 8%)", amostra_total, f"Pop: {und['pop_total']}")
+                    rc2.metric("Amostra Líderes (Hom. 5%)", amostra_lideres, f"Pop: {und['lideres']}")
+                    rc3.metric("Horas Estimadas de Coleta", f"{total_horas_unidade}h")
+                    st.write(f"**Sugestão de Escopo:** {turmas_hm} Turmas H&M | {turmas_foco} Grupos Focais | {entrevistas} Entrevistas Ind.")
+
+        st.markdown("---")
+        st.markdown("### 💰 3. Precificação Base")
+        
+        bc1, bc2 = st.columns(2)
+        taxa_hora = bc1.number_input("Valor da Taxa Hora (R$)", min_value=0.0, value=480.0, step=10.0)
+        perc_logistica = bc2.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
+        
+        horas_fixas = 4 + 2 + 56 + 4 + 12
+        horas_totais = total_horas_campo + horas_fixas
+        
+        valor_op1 = horas_totais * taxa_hora
+        valor_op2 = valor_op1 * (1 + (perc_logistica / 100))
+        
+        st.success(f"**Carga Horária Total (Campo + Backoffice):** {horas_totais} horas")
+        st.metric("Total OP1 (Sem Logística)", formatar_moeda(valor_op1))
+        st.metric(f"Total OP2 (Com {perc_logistica}% Logística)", formatar_moeda(valor_op2))
+
+# ==========================================
+# MÓDULO 4: CRIAR APRESENTAÇÃO (MANTIDO 100%)
+# ==========================================
 elif menu == "📊 Criar Apresentação":
     st.title("📊 Gerador de Propostas")
     tipo_apresentacao = st.radio("Selecione o tipo de documento:", ["Apresentação Técnica", "Apresentação Comercial"], horizontal=True)
@@ -331,7 +413,7 @@ elif menu == "📊 Criar Apresentação":
                 atividades_lista.append({"nome": nome_at, "meses": meses_at})
 
     # ==========================================
-    # LÓGICA: APRESENTAÇÃO TÉCNICA
+    # APRESENTAÇÃO TÉCNICA
     # ==========================================
     if tipo_apresentacao == "Apresentação Técnica":
         with st.expander("👥 3. Detalhamento do Público e Relatórios", expanded=True):
@@ -397,7 +479,7 @@ elif menu == "📊 Criar Apresentação":
             st.download_button("⬇️ Baixar Documento Gerado", data=st.session_state.pptx_gerado, file_name=st.session_state.nome_arquivo, mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
 
     # ==========================================
-    # LÓGICA: APRESENTAÇÃO COMERCIAL
+    # APRESENTAÇÃO COMERCIAL
     # ==========================================
     elif tipo_apresentacao == "Apresentação Comercial":
         with st.expander("👥 3. Público Alvo", expanded=True):
@@ -460,7 +542,7 @@ elif menu == "📊 Criar Apresentação":
                     "{{NUM_PROP}}": num_prop, "{{ESCOPO}}": escopo_tag,
                     "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
                     "{{JUSTIFICATIVA}}": justificativa, "{{OBJETIVO}}": objetivo,
-                    "{{PUBLICO}}": str(publico_total), # NOVO CAMPO DE PUBLICO COMERCIAL
+                    "{{PUBLICO}}": str(publico_total), 
                     "{{PRAZO}}": prazo, "{{FORMATO}}": formato, "{{IDIOMA}}": idioma_str, "{{IDAS}}": str(idas),
                     "{{VALOR_OP1}}": formatar_moeda(total_op1),
                     "{{VALOR_OP2}}": formatar_moeda(total_op2),
