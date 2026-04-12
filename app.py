@@ -257,13 +257,15 @@ if menu == "🏠 Início":
     st.session_state.tentou_gerar = False
 
 # ==========================================
-# MÓDULO 2: PRECIFICAÇÃO (NOVO)
+# MÓDULO 2: PRECIFICAÇÃO 
 # ==========================================
 elif menu == "💰 Criar Precificação":
     st.title("💰 Motor de Precificação")
     servico_prec = st.selectbox("Selecione o Serviço para Precificar:", ["Diagnóstico (DCS)", "Mapeamento de Liderança (MPL) - Em breve"])
     
     if servico_prec == "Diagnóstico (DCS)":
+        
+        # --- PAINEL INTACTO: CADASTRO E AMOSTRA ---
         st.markdown("### 📊 1. Cadastro de População e Unidades")
         st.info("Insira as áreas ou unidades. O sistema fará o cálculo da amostra usando 95% de confiança.")
         
@@ -311,21 +313,101 @@ elif menu == "💰 Criar Precificação":
                     st.write(f"**Sugestão de Escopo:** {turmas_hm} Turmas H&M | {turmas_foco} Grupos Focais | {entrevistas} Entrevistas Ind.")
 
         st.markdown("---")
-        st.markdown("### 💰 3. Precificação Base")
         
-        bc1, bc2 = st.columns(2)
-        taxa_hora = bc1.number_input("Valor da Taxa Hora (R$)", min_value=0.0, value=480.0, step=10.0)
-        perc_logistica = bc2.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
+        # --- NOVO PAINEL LOGÍSTICO COMPLETO ---
+        st.markdown("### 💰 3. Precificação Base e Logística")
+        
+        taxa_hora = st.number_input("Valor da Taxa Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0)
         
         horas_fixas = 4 + 2 + 56 + 4 + 12
         horas_totais = total_horas_campo + horas_fixas
-        
         valor_op1 = horas_totais * taxa_hora
-        valor_op2 = valor_op1 * (1 + (perc_logistica / 100))
         
+        st.write("#### Planejamento de Logística (Opção 2)")
+        tipo_logistica = st.selectbox("Formato de cálculo de deslocamento:", [
+            "1. Sem Logística (100% pelo Cliente)", 
+            "2. Logística Base (Alimentação + Táxi da Base)", 
+            "3. Logística Completa (Cotações Detalhadas)", 
+            "4. Logística Estimada (Percentual %)"
+        ])
+        
+        logistica_total = 0.0
+        
+        # REGRA 1: Sem Logística
+        if tipo_logistica == "1. Sem Logística (100% pelo Cliente)":
+            st.info("A Opção 2 terá o mesmo valor da Opção 1, pois o cliente arcará com todos os custos de viagem diretamente.")
+            logistica_total = 0.0
+
+        # REGRA 2: Logística Base
+        elif tipo_logistica == "2. Logística Base (Alimentação + Táxi da Base)":
+            c_ida, c_dia = st.columns(2)
+            qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
+            dias_ida = c_dia.number_input("Dias por Ida (padrão 5 = semana cheia)", min_value=1, value=5)
+            
+            custo_taxi = qtd_idas * (150 * 2) # R$ 150 ida/volta por visita
+            custo_alimentacao = qtd_idas * dias_ida * 120 # R$ 120 por dia
+            logistica_total = custo_taxi + custo_alimentacao
+            
+            st.success(f"**Cálculo Base:** {qtd_idas} idas (Táxi: R$ {custo_taxi:,.2f}) + {qtd_idas * dias_ida} dias de alimentação (R$ {custo_alimentacao:,.2f}) = **R$ {logistica_total:,.2f}**")
+
+        # REGRA 3: Logística Completa
+        elif tipo_logistica == "3. Logística Completa (Cotações Detalhadas)":
+            c_ida, c_dia = st.columns(2)
+            qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
+            dias_ida = c_dia.number_input("Dias por Ida (padrão 5)", min_value=1, value=5)
+            
+            st.markdown("##### 🏨 Hospedagem")
+            ch1, ch2 = st.columns(2)
+            hotel_barato = ch1.number_input("Diária - Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
+            hotel_caro = ch2.number_input("Diária - Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
+            media_hotel = (hotel_barato + hotel_caro) / 2
+            custo_hotel = media_hotel * dias_ida * qtd_idas
+            
+            st.markdown("##### ✈️ Passagens Aéreas")
+            st.caption("A fórmula = ((Barato + Caro) * 3.2) / 6 será aplicada automaticamente.")
+            qtd_trechos = st.number_input("Quantos trechos aéreos diferentes?", min_value=0, value=1)
+            custo_aereo_total = 0.0
+            for i in range(int(qtd_trechos)):
+                ca1, ca2 = st.columns(2)
+                aereo_barato = ca1.number_input(f"Trecho {i+1} - Mais Barato (R$)", min_value=0.0, step=50.0, key=f"ab_{i}")
+                aereo_caro = ca2.number_input(f"Trecho {i+1} - Mais Caro (R$)", min_value=0.0, step=50.0, key=f"ac_{i}")
+                media_aereo = ((aereo_barato + aereo_caro) * 3.2) / 6
+                custo_aereo_total += (media_aereo * qtd_idas)
+
+            st.markdown("##### 🚗 Locação de Veículo e Deslocamentos")
+            cv1, cv2 = st.columns(2)
+            diaria_carro = cv1.number_input("Valor da Diária do Carro (R$)", min_value=0.0, step=10.0)
+            custo_carro = diaria_carro * dias_ida * qtd_idas
+            
+            dist_hotel_cliente = cv2.number_input("Distância Hotel ⇄ Cliente (Km - Total Ida e Volta diária)", min_value=0.0, step=5.0)
+            custo_combustivel_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida * qtd_idas
+            
+            st.markdown("##### 🛣️ Aeroporto até o Cliente")
+            cae1, cae2 = st.columns(2)
+            dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Cliente (Km - Total Ida e Volta da viagem)", min_value=0.0, step=10.0)
+            pedagio_aero = cae2.number_input("Valor Pedágios Aeroporto ⇄ Cliente (R$ Total)", min_value=0.0, step=5.0)
+            
+            custo_combustivel_aero = (dist_aero_cliente / 9.0) * 6.0 * qtd_idas
+            custo_pedagio = pedagio_aero * qtd_idas
+            
+            logistica_total = custo_hotel + custo_aereo_total + custo_carro + custo_combustivel_hotel + custo_combustivel_aero + custo_pedagio
+            
+            st.info(f"**Resumo Logística Cotação:** Hospedagem (R$ {custo_hotel:,.2f}) + Aéreo (R$ {custo_aereo_total:,.2f}) + Carro (R$ {custo_carro:,.2f}) + Combustível (R$ {(custo_combustivel_hotel+custo_combustivel_aero):,.2f}) + Pedágio (R$ {custo_pedagio:,.2f}) = **R$ {logistica_total:,.2f}**")
+
+        # REGRA 4: Logística Percentual
+        elif tipo_logistica == "4. Logística Estimada (Percentual %)":
+            perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
+            logistica_total = valor_op1 * (perc_logistica / 100)
+            st.success(f"Cálculo: {perc_logistica}% sobre o valor técnico da OP1 = **R$ {logistica_total:,.2f}**")
+        
+        # Consolidação Financeira
+        valor_op2 = valor_op1 + logistica_total
+        
+        st.markdown("---")
         st.success(f"**Carga Horária Total (Campo + Backoffice):** {horas_totais} horas")
-        st.metric("Total OP1 (Sem Logística)", formatar_moeda(valor_op1))
-        st.metric(f"Total OP2 (Com {perc_logistica}% Logística)", formatar_moeda(valor_op2))
+        c_tot1, c_tot2 = st.columns(2)
+        c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
+        c_tot2.metric("Total OP2 (Com Logística)", formatar_moeda(valor_op2))
 
 # ==========================================
 # MÓDULO 4: CRIAR APRESENTAÇÃO (MANTIDO 100%)
