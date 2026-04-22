@@ -128,7 +128,6 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     for key, value in mapa.items():
                                         if key in run.text: run.text = run.text.replace(key, str(value))
 
-                # GANTT
                 if len(tbl.columns) >= 12 and len(atividades) > 0:
                     colunas_para_deletar = list(range(qtd_meses + 1, len(tbl.columns)))
                     try:
@@ -172,7 +171,6 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
                                     cell_mes.fill.solid()
                                     cell_mes.fill.fore_color.rgb = VERDE_CPTO
 
-                # TABELAS FINANCEIRAS
                 if tipo_doc == "Comercial" and dados_fin:
                     try:
                         cabecalho = tbl.rows[0].cells[0].text.strip().lower()
@@ -234,6 +232,17 @@ if 'tentou_gerar' not in st.session_state: st.session_state.tentou_gerar = False
 if 'unidades_dcs' not in st.session_state:
     st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
 
+# --- NOVO ESTADO: FASES DO PLANO DETALHADO ---
+if 'fases_dcs' not in st.session_state:
+    st.session_state.fases_dcs = [
+        {"id": 0, "nome": "Planejamento / Reunião de Abertura", "horas": 4},
+        {"id": 1, "nome": "Workshop - Gestão de Cultura de Segurança", "horas": 2},
+        {"id": 2, "nome": "Elaboração do Relatório", "horas": 56},
+        {"id": 3, "nome": "Apresentação dos Resultados", "horas": 4},
+        {"id": 4, "nome": "Plano de Transformação Cultural (PTC)", "horas": 12},
+        {"id": 5, "nome": "Suporte e Acompanhamento", "horas": 64}
+    ]
+
 def acionar_geracao():
     st.session_state.tentou_gerar = True
 
@@ -244,6 +253,14 @@ def adicionar_unidade():
 def remover_unidade(id_remover):
     if len(st.session_state.unidades_dcs) > 1:
         st.session_state.unidades_dcs = [u for u in st.session_state.unidades_dcs if u['id'] != id_remover]
+
+def adicionar_fase():
+    novo_id = max([f['id'] for f in st.session_state.fases_dcs], default=-1) + 1
+    st.session_state.fases_dcs.append({"id": novo_id, "nome": "Nova Etapa", "horas": 0})
+
+def remover_fase(id_remover):
+    st.session_state.fases_dcs = [f for f in st.session_state.fases_dcs if f['id'] != id_remover]
+
 
 st.sidebar.title("🧭 Navegação")
 menu = st.sidebar.radio("Selecione o Módulo:", ["🏠 Início", "💰 Criar Precificação", "📊 Criar Apresentação"])
@@ -257,7 +274,7 @@ if menu == "🏠 Início":
     st.session_state.tentou_gerar = False
 
 # ==========================================
-# MÓDULO 2: PRECIFICAÇÃO 
+# MÓDULO 2: PRECIFICAÇÃO
 # ==========================================
 elif menu == "💰 Criar Precificação":
     st.title("💰 Motor de Precificação")
@@ -265,7 +282,7 @@ elif menu == "💰 Criar Precificação":
     
     if servico_prec == "Diagnóstico (DCS)":
         
-        # --- PAINEL INTACTO: CADASTRO E AMOSTRA ---
+        # --- 1. CADASTRO DE UNIDADES ---
         st.markdown("### 📊 1. Cadastro de População e Unidades")
         st.info("Insira as áreas ou unidades. O sistema fará o cálculo da amostra usando 95% de confiança.")
         
@@ -283,7 +300,9 @@ elif menu == "💰 Criar Precificação":
         st.button("➕ Adicionar Unidade / Área", on_click=adicionar_unidade)
         
         st.markdown("---")
-        st.markdown("### ⚙️ 2. Motor Estatístico e Engajamento de Horas")
+        
+        # --- 2. MOTOR ESTATÍSTICO ---
+        st.markdown("### ⚙️ 2. Motor Estatístico (Coleta de Dados em Campo)")
         
         total_horas_campo = 0
         total_amostra = 0
@@ -313,14 +332,40 @@ elif menu == "💰 Criar Precificação":
                     st.write(f"**Sugestão de Escopo:** {turmas_hm} Turmas H&M | {turmas_foco} Grupos Focais | {entrevistas} Entrevistas Ind.")
 
         st.markdown("---")
+
+        # --- 3. PLANO DETALHADO (NOVO) ---
+        st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais e Backoffice)")
+        st.info("Estas são as etapas padrões do DCS. Modifique, adicione Oficinas ou remova o que não for usar.")
+
+        taxa_hora = st.number_input("Valor da Taxa Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0, key="taxa_hora_topo")
+
+        total_horas_fases = 0
+
+        for fase in st.session_state.fases_dcs:
+            f1, f2, f3 = st.columns([0.6, 0.2, 0.2])
+            fase['nome'] = f1.text_input("Nome da Etapa", value=fase['nome'], key=f"fnome_{fase['id']}")
+            fase['horas'] = f2.number_input("Carga Horária (h)", min_value=0, value=fase['horas'], key=f"fhoras_{fase['id']}")
+            
+            total_horas_fases += fase['horas']
+
+            if f3.button("🗑️ Remover", key=f"frem_{fase['id']}"):
+                remover_fase(fase['id'])
+                st.rerun()
+
+        st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
+
+        # Resumo do Plano Detalhado
+        valor_parcial_fases = total_horas_fases * taxa_hora
+        st.markdown(f"**Resumo do Plano Detalhado:** {len(st.session_state.fases_dcs)} etapas cadastradas | **{total_horas_fases} horas** totais.")
+        st.caption(f"Equivalente a: {total_horas_fases}h * {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**")
+
+        st.markdown("---")
         
-        # --- NOVO PAINEL LOGÍSTICO COMPLETO ---
-        st.markdown("### 💰 3. Precificação Base e Logística")
+        # --- 4. PRECIFICACAO BASE E LOGISTICA ---
+        st.markdown("### 💰 4. Precificação Final e Logística")
         
-        taxa_hora = st.number_input("Valor da Taxa Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0)
-        
-        horas_fixas = 4 + 2 + 56 + 4 + 12
-        horas_totais = total_horas_campo + horas_fixas
+        # A soma total de horas agora inclui as horas variáveis de campo + as horas dinâmicas do Plano Detalhado
+        horas_totais = total_horas_campo + total_horas_fases
         valor_op1 = horas_totais * taxa_hora
         
         st.write("#### Planejamento de Logística (Opção 2)")
@@ -333,24 +378,21 @@ elif menu == "💰 Criar Precificação":
         
         logistica_total = 0.0
         
-        # REGRA 1: Sem Logística
         if tipo_logistica == "1. Sem Logística (100% pelo Cliente)":
             st.info("A Opção 2 terá o mesmo valor da Opção 1, pois o cliente arcará com todos os custos de viagem diretamente.")
             logistica_total = 0.0
 
-        # REGRA 2: Logística Base
         elif tipo_logistica == "2. Logística Base (Alimentação + Táxi da Base)":
             c_ida, c_dia = st.columns(2)
             qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
             dias_ida = c_dia.number_input("Dias por Ida (padrão 5 = semana cheia)", min_value=1, value=5)
             
-            custo_taxi = qtd_idas * (150 * 2) # R$ 150 ida/volta por visita
-            custo_alimentacao = qtd_idas * dias_ida * 120 # R$ 120 por dia
+            custo_taxi = qtd_idas * (150 * 2)
+            custo_alimentacao = qtd_idas * dias_ida * 120
             logistica_total = custo_taxi + custo_alimentacao
             
             st.success(f"**Cálculo Base:** {qtd_idas} idas (Táxi: R$ {custo_taxi:,.2f}) + {qtd_idas * dias_ida} dias de alimentação (R$ {custo_alimentacao:,.2f}) = **R$ {logistica_total:,.2f}**")
 
-        # REGRA 3: Logística Completa
         elif tipo_logistica == "3. Logística Completa (Cotações Detalhadas)":
             c_ida, c_dia = st.columns(2)
             qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
@@ -394,23 +436,21 @@ elif menu == "💰 Criar Precificação":
             
             st.info(f"**Resumo Logística Cotação:** Hospedagem (R$ {custo_hotel:,.2f}) + Aéreo (R$ {custo_aereo_total:,.2f}) + Carro (R$ {custo_carro:,.2f}) + Combustível (R$ {(custo_combustivel_hotel+custo_combustivel_aero):,.2f}) + Pedágio (R$ {custo_pedagio:,.2f}) = **R$ {logistica_total:,.2f}**")
 
-        # REGRA 4: Logística Percentual
         elif tipo_logistica == "4. Logística Estimada (Percentual %)":
             perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
             logistica_total = valor_op1 * (perc_logistica / 100)
             st.success(f"Cálculo: {perc_logistica}% sobre o valor técnico da OP1 = **R$ {logistica_total:,.2f}**")
         
-        # Consolidação Financeira
         valor_op2 = valor_op1 + logistica_total
         
         st.markdown("---")
-        st.success(f"**Carga Horária Total (Campo + Backoffice):** {horas_totais} horas")
+        st.success(f"**Carga Horária Total (Amostragem de Campo + Etapas do Plano):** {horas_totais} horas")
         c_tot1, c_tot2 = st.columns(2)
         c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
         c_tot2.metric("Total OP2 (Com Logística)", formatar_moeda(valor_op2))
 
 # ==========================================
-# MÓDULO 4: CRIAR APRESENTAÇÃO (MANTIDO 100%)
+# MÓDULO 4: CRIAR APRESENTAÇÃO 
 # ==========================================
 elif menu == "📊 Criar Apresentação":
     st.title("📊 Gerador de Propostas")
