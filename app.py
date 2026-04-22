@@ -234,7 +234,6 @@ def ir_para(pagina):
     st.session_state.tentou_gerar = False
     st.session_state.pptx_gerado = None
 
-# Variáveis globais de inteligência
 if 'unidades_dcs' not in st.session_state: st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
 if 'fases_dcs' not in st.session_state:
     st.session_state.fases_dcs = [
@@ -267,7 +266,6 @@ def adicionar_fase():
 
 def remover_fase(id_remover):
     st.session_state.fases_dcs = [f for f in st.session_state.fases_dcs if f['id'] != id_remover]
-
 
 st.sidebar.title("🧭 Navegação Integrada")
 menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial"]
@@ -312,27 +310,57 @@ elif st.session_state.current_page == "💰 1. Precificação":
         
         total_horas_campo = 0
         total_amostra = 0
+        dados_tabela_prova = []
         
         for und in st.session_state.unidades_dcs:
             if und['pop_total'] > 0:
+                # Estatística
                 amostra_total = calcular_amostra(und['pop_total'], margem_erro=0.08, proporcao=0.5)
                 amostra_lideres = calcular_amostra(und['lideres'], margem_erro=0.05, proporcao=0.8)
+                amostra_operacional = max(0, amostra_total - amostra_lideres)
                 
-                turmas_hm = math.ceil(amostra_lideres / 12)
-                turmas_foco = math.ceil((amostra_total - amostra_lideres) / 12) if amostra_total > amostra_lideres else 0
+                # Conversão Lógica Exata
+                turmas_hm = math.floor(amostra_lideres / 12)  # Turmas cheias de 12
+                entrevistas = amostra_lideres % 12            # Saldo restante
+                turmas_foco = math.ceil(amostra_operacional / 12) # Operacionais arredondado p/ cima
+                
                 horas_hm = turmas_hm * 2
                 horas_foco = turmas_foco * 2
-                entrevistas = max(0, amostra_lideres - (turmas_hm * 12)) if amostra_lideres > 0 else 8
                 horas_entrevistas = entrevistas * 1.5
                 
                 total_horas_unidade = horas_hm + horas_foco + horas_entrevistas
                 total_horas_campo += total_horas_unidade
                 total_amostra += amostra_total
+                
+                # Salva dados para a Tabela de Prova Real
+                dados_tabela_prova.append({
+                    "Unidade / Área": und['nome'],
+                    "Pop. Total": und['pop_total'],
+                    "Amostra Base (Het. 8%)": amostra_total,
+                    "Pop. Líderes": und['lideres'],
+                    "Amostra Líderes (Hom. 5%)": amostra_lideres,
+                    "Total Horas Campo": f"{total_horas_unidade} h"
+                })
+                
+                with st.expander(f"📌 Racional de Cálculo: {und['nome']}", expanded=False):
+                    st.write(f"**1. Liderança:** Dos {und['lideres']} líderes, a amostra exigida é de **{amostra_lideres} pessoas**.")
+                    st.write(f"↳ Formaremos **{turmas_hm} turmas de Hearts & Minds** de 12 pessoas (*{turmas_hm} turmas x 2h = {horas_hm}h*).")
+                    st.write(f"↳ O saldo de **{entrevistas} líderes** farão **Entrevistas Individuais** (*{entrevistas} pessoas x 1,5h = {horas_entrevistas}h*).")
+                    
+                    st.write(f"**2. Base Operacional:** População de {und['pop_total'] - und['lideres']} pessoas, resultando na amostra restante de **{amostra_operacional} pessoas**.")
+                    st.write(f"↳ Formaremos **{turmas_foco} Grupos Focais** de até 12 pessoas (*{turmas_foco} turmas x 2h = {horas_foco}h*).")
+                    
+                    st.success(f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas}h (Entrevistas) + {horas_foco}h (Grupos Focais) = **{total_horas_unidade} horas**.")
 
-        st.info(f"O motor estatístico gerou um total de **{total_horas_campo} horas de campo** com base nas unidades informadas.")
+        # Exibe a Tabela de Prova Real
+        if dados_tabela_prova:
+            st.markdown("#### 📝 Tabela de Prova Real (Resumo de Amostragem)")
+            st.table(pd.DataFrame(dados_tabela_prova))
 
         st.markdown("---")
-        st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais e Backoffice)")
+        st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais)")
+        st.info("Personalize as etapas fixas e operacionais do projeto. As horas cadastradas aqui serão somadas à coleta de campo.")
+        
         taxa_hora = st.number_input("Valor da Taxa Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0, key="taxa_hora_topo")
 
         total_horas_fases = 0
@@ -346,6 +374,9 @@ elif st.session_state.current_page == "💰 1. Precificação":
                 st.rerun()
 
         st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
+
+        valor_parcial_fases = total_horas_fases * taxa_hora
+        st.success(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Taxa de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**.")
 
         st.markdown("---")
         st.markdown("### 💰 4. Precificação Final e Logística")
@@ -362,13 +393,15 @@ elif st.session_state.current_page == "💰 1. Precificação":
         if tipo_logistica == "2. Logística Estimada (Percentual %)":
             perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
             logistica_total = valor_op1 * (perc_logistica / 100)
+            st.info(f"Cálculo: {perc_logistica}% sobre o Serviço Técnico ({formatar_moeda(valor_op1)}) = {formatar_moeda(logistica_total)}")
         
         valor_op2 = valor_op1 + logistica_total
         
         st.session_state.valores_finais["op1"] = valor_op1
         st.session_state.valores_finais["op2"] = valor_op2
         
-        st.success(f"**Carga Horária Total:** {horas_totais} horas")
+        st.write(f"**Racional da Precificação Técnica:** {total_horas_campo}h (Campo) + {total_horas_fases}h (Plano Detalhado) = **{horas_totais} horas totais de projeto**.")
+        
         c_tot1, c_tot2 = st.columns(2)
         c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
         c_tot2.metric("Total OP2 (Com Logística)", formatar_moeda(valor_op2))
@@ -415,8 +448,7 @@ elif st.session_state.current_page == "📝 2. Proposta Técnica":
         qtd_meses_projeto = st.number_input("Duração total do projeto (meses)", min_value=1, value=12)
         
         atividades_lista = []
-        # Importa do session_state da precificação + a coleta que é implícita
-        fases_importadas = [{"nome": "Coleta de Dados"}] + st.session_state.fases_dcs
+        fases_importadas = [{"nome": "Coleta de Dados em Campo"}] + st.session_state.fases_dcs
         
         for i, fase in enumerate(fases_importadas):
             ca, cm = st.columns([0.4, 0.6])
@@ -426,18 +458,18 @@ elif st.session_state.current_page == "📝 2. Proposta Técnica":
                 atividades_lista.append({"nome": nome_at, "meses": meses_at})
 
     with st.expander("👥 3. Detalhamento Simplificado do Público", expanded=True):
-        st.info("Os totais foram carregados da Precificação. Ajuste conforme necessário.")
+        st.info("Os totais foram carregados da Precificação. Ajuste caso o projeto demande adicionar terceiros que não estavam no cálculo amostral.")
         
         lideres_calc = sum(u['lideres'] for u in st.session_state.unidades_dcs)
         pop_calc = sum(u['pop_total'] for u in st.session_state.unidades_dcs)
         
         cp1, cp2, cp3 = st.columns(3)
-        n_lid_total = cp1.number_input("Total de Líderes", min_value=0, value=int(lideres_calc))
-        n_oper = cp2.number_input("Total de Operacionais / Base", min_value=0, value=int(max(0, pop_calc - lideres_calc)))
-        n_terc = cp3.number_input("Terceiros (Adicionais)", min_value=0, value=0)
+        n_lid_total = cp1.number_input("Total de Líderes (Equipe Própria)", min_value=0, value=int(lideres_calc))
+        n_oper = cp2.number_input("Total Operacional (Equipe Própria)", min_value=0, value=int(max(0, pop_calc - lideres_calc)))
+        n_terc = cp3.number_input("Terceiros Adicionais", min_value=0, value=0)
         
         n_p_terc = n_lid_total + n_oper + n_terc
-        st.metric("Total do Público Alvo", n_p_terc)
+        st.metric("Público Alvo Consolidado no Relatório", n_p_terc)
 
     colA, colB = st.columns(2)
     colA.button("⬅️ Voltar para Precificação", on_click=ir_para, args=("💰 1. Precificação",))
@@ -464,7 +496,6 @@ elif st.session_state.current_page == "📝 2. Proposta Técnica":
                 "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
                 "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
                 "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
-                # As macros de detalhamento foram resumidas
                 "{{N_LID}}": str(n_lid_total), 
                 "{{N_OPER}}": str(n_oper), 
                 "{{N_PTERC}}": str(n_p_terc)
