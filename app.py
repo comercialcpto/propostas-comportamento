@@ -58,7 +58,6 @@ def valor_por_extenso(valor):
     extenso_final = ", ".join(resultado).replace(", e", " e")
     return extenso_final.capitalize() + (" reais" if inteiro > 1 else " real")
 
-# --- MOTOR ESTATÍSTICO DCS ---
 def calcular_amostra(N, margem_erro, proporcao, z=1.96):
     if N <= 0: return 0
     numerador = N * (z**2) * proporcao * (1 - proporcao)
@@ -221,7 +220,7 @@ def processar_apresentacao(template_file, mapa, atividades, tipo_doc, dados_fin=
     return output
 
 # ==========================================
-# 3. INTERFACE DE USUÁRIO E ESTADOS
+# 3. INTERFACE DE USUÁRIO E ESTADOS (WIZARD)
 # ==========================================
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
 
@@ -229,10 +228,14 @@ if "pptx_gerado" not in st.session_state: st.session_state.pptx_gerado = None
 if "nome_arquivo" not in st.session_state: st.session_state.nome_arquivo = ""
 if 'tentou_gerar' not in st.session_state: st.session_state.tentou_gerar = False
 
-if 'unidades_dcs' not in st.session_state:
-    st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
+if 'current_page' not in st.session_state: st.session_state.current_page = "🏠 Início"
+def ir_para(pagina):
+    st.session_state.current_page = pagina
+    st.session_state.tentou_gerar = False
+    st.session_state.pptx_gerado = None
 
-# --- NOVO ESTADO: FASES DO PLANO DETALHADO ---
+# Variáveis globais de inteligência
+if 'unidades_dcs' not in st.session_state: st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
 if 'fases_dcs' not in st.session_state:
     st.session_state.fases_dcs = [
         {"id": 0, "nome": "Planejamento / Reunião de Abertura", "horas": 4},
@@ -242,9 +245,13 @@ if 'fases_dcs' not in st.session_state:
         {"id": 4, "nome": "Plano de Transformação Cultural (PTC)", "horas": 12},
         {"id": 5, "nome": "Suporte e Acompanhamento", "horas": 64}
     ]
-
-def acionar_geracao():
-    st.session_state.tentou_gerar = True
+if 'memoria_geral' not in st.session_state:
+    st.session_state.memoria_geral = {
+        "cliente": "", "unidade": "", "num_prop": "", "escopo": "", "prazo": "", 
+        "formato": "Híbrido", "justificativa": "", "objetivo": "", "idas": 0
+    }
+if 'valores_finais' not in st.session_state:
+    st.session_state.valores_finais = {"op1": 0.0, "op2": 0.0}
 
 def adicionar_unidade():
     novo_id = len(st.session_state.unidades_dcs)
@@ -262,29 +269,30 @@ def remover_fase(id_remover):
     st.session_state.fases_dcs = [f for f in st.session_state.fases_dcs if f['id'] != id_remover]
 
 
-st.sidebar.title("🧭 Navegação")
-menu = st.sidebar.radio("Selecione o Módulo:", ["🏠 Início", "💰 Criar Precificação", "📊 Criar Apresentação"])
+st.sidebar.title("🧭 Navegação Integrada")
+menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial"]
+selecao_menu = st.sidebar.radio("Etapa do Projeto:", menu_options, index=menu_options.index(st.session_state.current_page))
+st.session_state.current_page = selecao_menu
 
 # ==========================================
 # MÓDULO 1: INÍCIO
 # ==========================================
-if menu == "🏠 Início":
-    st.title("Bem-vindo ao Sistema Comercial - Comportamento")
-    st.write("Selecione um módulo no menu lateral para começar.")
-    st.session_state.tentou_gerar = False
+if st.session_state.current_page == "🏠 Início":
+    st.title("Bem-vindo ao Sistema Integrado - Comportamento")
+    st.write("Siga o fluxo integrado: calcule os custos, gere a proposta técnica e, em seguida, a comercial. Os dados acompanham você!")
+    st.button("🚀 Iniciar Novo Projeto (Ir para Precificação)", on_click=ir_para, args=("💰 1. Precificação",))
 
 # ==========================================
 # MÓDULO 2: PRECIFICAÇÃO
 # ==========================================
-elif menu == "💰 Criar Precificação":
-    st.title("💰 Motor de Precificação")
-    servico_prec = st.selectbox("Selecione o Serviço para Precificar:", ["Diagnóstico (DCS)", "Mapeamento de Liderança (MPL) - Em breve"])
+elif st.session_state.current_page == "💰 1. Precificação":
+    st.title("💰 1. Motor de Precificação")
+    servico_prec = st.selectbox("Selecione o Serviço para Precificar:", ["Diagnóstico (DCS/Clima/DCMA)", "Mapeamento de Liderança (MPL)"])
+    st.session_state.servico_selecionado = servico_prec
     
-    if servico_prec == "Diagnóstico (DCS)":
+    if servico_prec == "Diagnóstico (DCS/Clima/DCMA)":
         
-        # --- 1. CADASTRO DE UNIDADES ---
         st.markdown("### 📊 1. Cadastro de População e Unidades")
-        st.info("Insira as áreas ou unidades. O sistema fará o cálculo da amostra usando 95% de confiança.")
         
         for i, und in enumerate(st.session_state.unidades_dcs):
             c1, c2, c3, c4 = st.columns([0.4, 0.2, 0.2, 0.2])
@@ -300,8 +308,6 @@ elif menu == "💰 Criar Precificação":
         st.button("➕ Adicionar Unidade / Área", on_click=adicionar_unidade)
         
         st.markdown("---")
-        
-        # --- 2. MOTOR ESTATÍSTICO ---
         st.markdown("### ⚙️ 2. Motor Estatístico (Coleta de Dados em Campo)")
         
         total_horas_campo = 0
@@ -316,378 +322,236 @@ elif menu == "💰 Criar Precificação":
                 turmas_foco = math.ceil((amostra_total - amostra_lideres) / 12) if amostra_total > amostra_lideres else 0
                 horas_hm = turmas_hm * 2
                 horas_foco = turmas_foco * 2
-                
                 entrevistas = max(0, amostra_lideres - (turmas_hm * 12)) if amostra_lideres > 0 else 8
                 horas_entrevistas = entrevistas * 1.5
                 
                 total_horas_unidade = horas_hm + horas_foco + horas_entrevistas
                 total_horas_campo += total_horas_unidade
                 total_amostra += amostra_total
-                
-                with st.expander(f"📌 Resultados: {und['nome']} (Amostra: {amostra_total} pessoas)", expanded=True):
-                    rc1, rc2, rc3 = st.columns(3)
-                    rc1.metric("Amostra Total (Het. 8%)", amostra_total, f"Pop: {und['pop_total']}")
-                    rc2.metric("Amostra Líderes (Hom. 5%)", amostra_lideres, f"Pop: {und['lideres']}")
-                    rc3.metric("Horas Estimadas de Coleta", f"{total_horas_unidade}h")
-                    st.write(f"**Sugestão de Escopo:** {turmas_hm} Turmas H&M | {turmas_foco} Grupos Focais | {entrevistas} Entrevistas Ind.")
+
+        st.info(f"O motor estatístico gerou um total de **{total_horas_campo} horas de campo** com base nas unidades informadas.")
 
         st.markdown("---")
-
-        # --- 3. PLANO DETALHADO (NOVO) ---
         st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais e Backoffice)")
-        st.info("Estas são as etapas padrões do DCS. Modifique, adicione Oficinas ou remova o que não for usar.")
-
         taxa_hora = st.number_input("Valor da Taxa Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0, key="taxa_hora_topo")
 
         total_horas_fases = 0
-
         for fase in st.session_state.fases_dcs:
             f1, f2, f3 = st.columns([0.6, 0.2, 0.2])
             fase['nome'] = f1.text_input("Nome da Etapa", value=fase['nome'], key=f"fnome_{fase['id']}")
             fase['horas'] = f2.number_input("Carga Horária (h)", min_value=0, value=fase['horas'], key=f"fhoras_{fase['id']}")
-            
             total_horas_fases += fase['horas']
-
             if f3.button("🗑️ Remover", key=f"frem_{fase['id']}"):
                 remover_fase(fase['id'])
                 st.rerun()
 
         st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
 
-        # Resumo do Plano Detalhado
-        valor_parcial_fases = total_horas_fases * taxa_hora
-        st.markdown(f"**Resumo do Plano Detalhado:** {len(st.session_state.fases_dcs)} etapas cadastradas | **{total_horas_fases} horas** totais.")
-        st.caption(f"Equivalente a: {total_horas_fases}h * {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**")
-
         st.markdown("---")
-        
-        # --- 4. PRECIFICACAO BASE E LOGISTICA ---
         st.markdown("### 💰 4. Precificação Final e Logística")
         
-        # A soma total de horas agora inclui as horas variáveis de campo + as horas dinâmicas do Plano Detalhado
         horas_totais = total_horas_campo + total_horas_fases
         valor_op1 = horas_totais * taxa_hora
         
-        st.write("#### Planejamento de Logística (Opção 2)")
         tipo_logistica = st.selectbox("Formato de cálculo de deslocamento:", [
             "1. Sem Logística (100% pelo Cliente)", 
-            "2. Logística Base (Alimentação + Táxi da Base)", 
-            "3. Logística Completa (Cotações Detalhadas)", 
-            "4. Logística Estimada (Percentual %)"
+            "2. Logística Estimada (Percentual %)"
         ])
         
         logistica_total = 0.0
-        
-        if tipo_logistica == "1. Sem Logística (100% pelo Cliente)":
-            st.info("A Opção 2 terá o mesmo valor da Opção 1, pois o cliente arcará com todos os custos de viagem diretamente.")
-            logistica_total = 0.0
-
-        elif tipo_logistica == "2. Logística Base (Alimentação + Táxi da Base)":
-            c_ida, c_dia = st.columns(2)
-            qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-            dias_ida = c_dia.number_input("Dias por Ida (padrão 5 = semana cheia)", min_value=1, value=5)
-            
-            custo_taxi = qtd_idas * (150 * 2)
-            custo_alimentacao = qtd_idas * dias_ida * 120
-            logistica_total = custo_taxi + custo_alimentacao
-            
-            st.success(f"**Cálculo Base:** {qtd_idas} idas (Táxi: R$ {custo_taxi:,.2f}) + {qtd_idas * dias_ida} dias de alimentação (R$ {custo_alimentacao:,.2f}) = **R$ {logistica_total:,.2f}**")
-
-        elif tipo_logistica == "3. Logística Completa (Cotações Detalhadas)":
-            c_ida, c_dia = st.columns(2)
-            qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-            dias_ida = c_dia.number_input("Dias por Ida (padrão 5)", min_value=1, value=5)
-            
-            st.markdown("##### 🏨 Hospedagem")
-            ch1, ch2 = st.columns(2)
-            hotel_barato = ch1.number_input("Diária - Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
-            hotel_caro = ch2.number_input("Diária - Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
-            media_hotel = (hotel_barato + hotel_caro) / 2
-            custo_hotel = media_hotel * dias_ida * qtd_idas
-            
-            st.markdown("##### ✈️ Passagens Aéreas")
-            st.caption("A fórmula = ((Barato + Caro) * 3.2) / 6 será aplicada automaticamente.")
-            qtd_trechos = st.number_input("Quantos trechos aéreos diferentes?", min_value=0, value=1)
-            custo_aereo_total = 0.0
-            for i in range(int(qtd_trechos)):
-                ca1, ca2 = st.columns(2)
-                aereo_barato = ca1.number_input(f"Trecho {i+1} - Mais Barato (R$)", min_value=0.0, step=50.0, key=f"ab_{i}")
-                aereo_caro = ca2.number_input(f"Trecho {i+1} - Mais Caro (R$)", min_value=0.0, step=50.0, key=f"ac_{i}")
-                media_aereo = ((aereo_barato + aereo_caro) * 3.2) / 6
-                custo_aereo_total += (media_aereo * qtd_idas)
-
-            st.markdown("##### 🚗 Locação de Veículo e Deslocamentos")
-            cv1, cv2 = st.columns(2)
-            diaria_carro = cv1.number_input("Valor da Diária do Carro (R$)", min_value=0.0, step=10.0)
-            custo_carro = diaria_carro * dias_ida * qtd_idas
-            
-            dist_hotel_cliente = cv2.number_input("Distância Hotel ⇄ Cliente (Km - Total Ida e Volta diária)", min_value=0.0, step=5.0)
-            custo_combustivel_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida * qtd_idas
-            
-            st.markdown("##### 🛣️ Aeroporto até o Cliente")
-            cae1, cae2 = st.columns(2)
-            dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Cliente (Km - Total Ida e Volta da viagem)", min_value=0.0, step=10.0)
-            pedagio_aero = cae2.number_input("Valor Pedágios Aeroporto ⇄ Cliente (R$ Total)", min_value=0.0, step=5.0)
-            
-            custo_combustivel_aero = (dist_aero_cliente / 9.0) * 6.0 * qtd_idas
-            custo_pedagio = pedagio_aero * qtd_idas
-            
-            logistica_total = custo_hotel + custo_aereo_total + custo_carro + custo_combustivel_hotel + custo_combustivel_aero + custo_pedagio
-            
-            st.info(f"**Resumo Logística Cotação:** Hospedagem (R$ {custo_hotel:,.2f}) + Aéreo (R$ {custo_aereo_total:,.2f}) + Carro (R$ {custo_carro:,.2f}) + Combustível (R$ {(custo_combustivel_hotel+custo_combustivel_aero):,.2f}) + Pedágio (R$ {custo_pedagio:,.2f}) = **R$ {logistica_total:,.2f}**")
-
-        elif tipo_logistica == "4. Logística Estimada (Percentual %)":
+        if tipo_logistica == "2. Logística Estimada (Percentual %)":
             perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
             logistica_total = valor_op1 * (perc_logistica / 100)
-            st.success(f"Cálculo: {perc_logistica}% sobre o valor técnico da OP1 = **R$ {logistica_total:,.2f}**")
         
         valor_op2 = valor_op1 + logistica_total
         
-        st.markdown("---")
-        st.success(f"**Carga Horária Total (Amostragem de Campo + Etapas do Plano):** {horas_totais} horas")
+        st.session_state.valores_finais["op1"] = valor_op1
+        st.session_state.valores_finais["op2"] = valor_op2
+        
+        st.success(f"**Carga Horária Total:** {horas_totais} horas")
         c_tot1, c_tot2 = st.columns(2)
         c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
         c_tot2.metric("Total OP2 (Com Logística)", formatar_moeda(valor_op2))
 
+        st.write("")
+        st.button("Salvar e Avançar para Proposta Técnica ➡️", on_click=ir_para, args=("📝 2. Proposta Técnica",), type="primary")
+
 # ==========================================
-# MÓDULO 4: CRIAR APRESENTAÇÃO 
+# MÓDULO 3: PROPOSTA TÉCNICA
 # ==========================================
-elif menu == "📊 Criar Apresentação":
-    st.title("📊 Gerador de Propostas")
-    tipo_apresentacao = st.radio("Selecione o tipo de documento:", ["Apresentação Técnica", "Apresentação Comercial"], horizontal=True)
+elif st.session_state.current_page == "📝 2. Proposta Técnica":
+    st.title("📝 2. Gerador de Proposta Técnica")
+    st.caption("As informações inseridas aqui alimentarão automaticamente a Proposta Comercial.")
     
     with st.sidebar:
         st.markdown("---")
-        st.header("📁 Template Original")
-        template_upload = st.file_uploader(f"Suba o template ({tipo_apresentacao})", type="pptx")
+        template_upload = st.file_uploader(f"Suba o template (Técnica)", type="pptx")
     
     campos_vazios = []
 
-    with st.expander("📍 1. Identificação Geral", expanded=True):
+    with st.expander("📍 1. Identificação Geral (Compartilhada)", expanded=True):
         c1, c2, c3 = st.columns(3)
-        servico = c1.selectbox("Serviço Principal", ["Diagnóstico (DCS/Clima/DCMA)", "Mapeamento de Liderança (MPL)", "Riscos Psicossociais (RPS)", "Pulse", "Pontuais / Palestras"])
         
-        cliente = c2.text_input("Nome da Empresa ({{CLIENTE}})*")
-        if st.session_state.tentou_gerar and not cliente: 
-            c2.error("Campo obrigatório!")
-            campos_vazios.append("Nome da Empresa")
-
-        unidade = c3.text_input("Unidade ({{UNIDADE}})*")
-        if st.session_state.tentou_gerar and not unidade: 
-            c3.error("Campo obrigatório!")
-            campos_vazios.append("Unidade")
+        srv = st.session_state.get('servico_selecionado', "Diagnóstico (DCS/Clima/DCMA)")
+        st.session_state.memoria_geral["servico"] = c1.text_input("Serviço Principal", value=srv, disabled=True)
+        
+        st.session_state.memoria_geral["cliente"] = c2.text_input("Nome da Empresa ({{CLIENTE}})*", value=st.session_state.memoria_geral.get("cliente", ""))
+        st.session_state.memoria_geral["unidade"] = c3.text_input("Unidade ({{UNIDADE}})*", value=st.session_state.memoria_geral.get("unidade", ""))
         
         c4, c5, c6 = st.columns(3)
-        num_prop = c4.text_input("Nº da Proposta ({{NUM_PROP}})*")
-        if st.session_state.tentou_gerar and not num_prop: 
-            c4.error("Campo obrigatório!")
-            campos_vazios.append("Nº da Proposta")
-
-        escopo_tag = c5.text_input("Título do Escopo ({{ESCOPO}})*")
-        if st.session_state.tentou_gerar and not escopo_tag: 
-            c5.error("Campo obrigatório!")
-            campos_vazios.append("Título do Escopo")
-
-        prazo = c6.text_input("Prazo ({{PRAZO}})*")
-        if st.session_state.tentou_gerar and not prazo: 
-            c6.error("Campo obrigatório!")
-            campos_vazios.append("Prazo")
+        st.session_state.memoria_geral["num_prop"] = c4.text_input("Nº da Proposta ({{NUM_PROP}})*", value=st.session_state.memoria_geral.get("num_prop", ""))
+        st.session_state.memoria_geral["escopo"] = c5.text_input("Título do Escopo ({{ESCOPO}})*", value=st.session_state.memoria_geral.get("escopo", ""))
+        st.session_state.memoria_geral["prazo"] = c6.text_input("Prazo ({{PRAZO}})*", value=st.session_state.memoria_geral.get("prazo", ""))
         
-        c7, c8, c9 = st.columns(3)
-        formato = c7.selectbox("Formato ({{FORMATO}})*", ["Híbrido", "Presencial", "Online"])
+        c7, c8 = st.columns(2)
+        st.session_state.memoria_geral["formato"] = c7.selectbox("Formato ({{FORMATO}})*", ["Híbrido", "Presencial", "Online"], index=["Híbrido", "Presencial", "Online"].index(st.session_state.memoria_geral.get("formato", "Híbrido")))
+        st.session_state.memoria_geral["idas"] = c8.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=st.session_state.memoria_geral.get("idas", 0))
         
-        idiomas_selecionados = c8.multiselect("Idioma ({{IDIOMA}})*", ["Português", "Espanhol", "Inglês"], default=["Português"])
-        if len(idiomas_selecionados) == 1: idioma_str = idiomas_selecionados[0]
-        elif len(idiomas_selecionados) == 2: idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
-        elif len(idiomas_selecionados) > 2: idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
-        else: 
-            idioma_str = ""
-            if st.session_state.tentou_gerar:
-                c8.error("Selecione pelo menos um idioma!")
-                campos_vazios.append("Idioma")
-        
-        idas = c9.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=0)
-        
-        justificativa = st.text_area("Justificativa ({{JUSTIFICATIVA}})*")
-        if st.session_state.tentou_gerar and not justificativa: 
-            st.error("A Justificativa é obrigatória!")
-            campos_vazios.append("Justificativa")
+        st.session_state.memoria_geral["justificativa"] = st.text_area("Justificativa ({{JUSTIFICATIVA}})*", value=st.session_state.memoria_geral.get("justificativa", ""))
+        st.session_state.memoria_geral["objetivo"] = st.text_area("Objetivo ({{OBJETIVO}})*", value=st.session_state.memoria_geral.get("objetivo", ""))
 
-        objetivo = st.text_area("Objetivo ({{OBJETIVO}})*")
-        if st.session_state.tentou_gerar and not objetivo: 
-            st.error("O Objetivo é obrigatório!")
-            campos_vazios.append("Objetivo")
-
-    with st.expander("📅 2. Cronograma de Avanço (Gantt)", expanded=True):
-        cg1, cg2 = st.columns(2)
-        qtd_fases = cg1.number_input("Quantas Fases?", min_value=1, value=5)
-        qtd_meses_projeto = cg2.number_input("Duração total do projeto (meses)", min_value=1, value=12)
+    with st.expander("📅 2. Cronograma de Avanço Inteligente", expanded=True):
+        st.info("As fases abaixo foram importadas automaticamente do Plano Detalhado da Precificação.")
+        qtd_meses_projeto = st.number_input("Duração total do projeto (meses)", min_value=1, value=12)
         
         atividades_lista = []
-        for i in range(qtd_fases):
+        # Importa do session_state da precificação + a coleta que é implícita
+        fases_importadas = [{"nome": "Coleta de Dados"}] + st.session_state.fases_dcs
+        
+        for i, fase in enumerate(fases_importadas):
             ca, cm = st.columns([0.4, 0.6])
-            nome_at = ca.text_input(f"Nome da Fase {i+1}", key=f"f_{i}")
-            habilitar_meses = len(nome_at) >= 3
-            texto_placeholder = "Selecione os meses" if habilitar_meses else "Digite o nome da fase para liberar"
-            meses_at = cm.multiselect(texto_placeholder, list(range(1, int(qtd_meses_projeto) + 1)), key=f"m_{i}", disabled=not habilitar_meses)
-            
-            if habilitar_meses and meses_at:
+            nome_at = ca.text_input(f"Nome da Fase {i+1}", value=fase['nome'], key=f"tg_{i}")
+            meses_at = cm.multiselect("Selecione os meses", list(range(1, int(qtd_meses_projeto) + 1)), key=f"tm_{i}")
+            if meses_at:
                 atividades_lista.append({"nome": nome_at, "meses": meses_at})
 
-    # ==========================================
-    # APRESENTAÇÃO TÉCNICA
-    # ==========================================
-    if tipo_apresentacao == "Apresentação Técnica":
-        with st.expander("👥 3. Detalhamento do Público e Relatórios", expanded=True):
-            cp1, cp2, cp3 = st.columns(3)
-            n_pr = cp1.number_input("Executivos", min_value=0, value=0)
-            n_exec = cp2.number_input("Alta Liderança", min_value=0, value=0)
-            n_coord = cp3.number_input("Coordenadores", min_value=0, value=0)
-            n_super = cp1.number_input("Supervisores", min_value=0, value=0)
-            n_lid_extra = cp2.number_input("Outros Líderes", min_value=0, value=0)
-            n_sec = cp3.number_input("Segurança", min_value=0, value=0)
-            n_oper = cp1.number_input("Operacional", min_value=0, value=0)
-            n_col3 = cp2.number_input("Terceiros", min_value=0, value=0)
-            n_lid3 = cp3.number_input("Líderes Terc.", min_value=0, value=0)
+    with st.expander("👥 3. Detalhamento Simplificado do Público", expanded=True):
+        st.info("Os totais foram carregados da Precificação. Ajuste conforme necessário.")
+        
+        lideres_calc = sum(u['lideres'] for u in st.session_state.unidades_dcs)
+        pop_calc = sum(u['pop_total'] for u in st.session_state.unidades_dcs)
+        
+        cp1, cp2, cp3 = st.columns(3)
+        n_lid_total = cp1.number_input("Total de Líderes", min_value=0, value=int(lideres_calc))
+        n_oper = cp2.number_input("Total de Operacionais / Base", min_value=0, value=int(max(0, pop_calc - lideres_calc)))
+        n_terc = cp3.number_input("Terceiros (Adicionais)", min_value=0, value=0)
+        
+        n_p_terc = n_lid_total + n_oper + n_terc
+        st.metric("Total do Público Alvo", n_p_terc)
+
+    colA, colB = st.columns(2)
+    colA.button("⬅️ Voltar para Precificação", on_click=ir_para, args=("💰 1. Precificação",))
+    
+    def tentar_gerar_tecnica():
+        st.session_state.tentou_gerar = True
+        
+    colB.button("🚀 VALIDAR E GERAR TÉCNICA", on_click=tentar_gerar_tecnica, type="primary")
+
+    if st.session_state.tentou_gerar:
+        if not template_upload:
+            st.error("⚠️ Faça o upload do template da Técnica na barra lateral.")
+        else:
+            mapa = {
+                "{{SERVICO}}": st.session_state.memoria_geral["servico"], 
+                "{{CLIENTE}}": st.session_state.memoria_geral["cliente"], 
+                "{{UNIDADE}}": st.session_state.memoria_geral["unidade"], 
+                "{{NUM_PROP}}": st.session_state.memoria_geral["num_prop"], 
+                "{{ESCOPO}}": st.session_state.memoria_geral["escopo"],
+                "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
+                "{{JUSTIFICATIVA}}": st.session_state.memoria_geral["justificativa"], 
+                "{{OBJETIVO}}": st.session_state.memoria_geral["objetivo"],
+                "{{PUBLICO}}": str(n_p_terc), 
+                "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
+                "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
+                "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
+                # As macros de detalhamento foram resumidas
+                "{{N_LID}}": str(n_lid_total), 
+                "{{N_OPER}}": str(n_oper), 
+                "{{N_PTERC}}": str(n_p_terc)
+            }
+            with st.spinner("Construindo arquivo..."):
+                st.session_state.pptx_gerado = processar_apresentacao(template_upload, mapa, atividades_lista, "Técnica", None, qtd_meses_projeto)
+                st.session_state.nome_arquivo = f"Tecnica_{st.session_state.memoria_geral['cliente']}.pptx"
+            st.success("Técnica gerada com sucesso!")
+            st.session_state.tentou_gerar = False
+
+    if st.session_state.pptx_gerado and st.session_state.nome_arquivo.startswith("Tecnica"):
+        st.download_button("⬇️ Baixar PPTX Técnico", data=st.session_state.pptx_gerado, file_name=st.session_state.nome_arquivo)
+        st.write("")
+        st.button("Avançar para Proposta Comercial ➡️", on_click=ir_para, args=("📈 3. Proposta Comercial",))
+
+# ==========================================
+# MÓDULO 4: PROPOSTA COMERCIAL
+# ==========================================
+elif st.session_state.current_page == "📈 3. Proposta Comercial":
+    st.title("📈 3. Gerador de Proposta Comercial")
+    st.caption("A mágica acontece aqui: não é preciso digitar mais nada além das parcelas.")
+    
+    with st.sidebar:
+        st.markdown("---")
+        template_upload = st.file_uploader(f"Suba o template (Comercial)", type="pptx")
+
+    st.success("✅ Informações Gerais (Cliente, Justificativa, Prazos) carregadas da Técnica.")
+    
+    with st.expander("💰 Configuração de Parcelamento", expanded=True):
+        st.info("Os valores totais foram puxados diretamente do Motor de Precificação.")
+        v_op1 = st.session_state.valores_finais["op1"]
+        v_op2 = st.session_state.valores_finais["op2"]
+        
+        st.markdown(f"**Total Investimento Técnico (OP1):** {formatar_moeda(v_op1)}")
+        st.markdown(f"**Total Turnkey com Logística (OP2):** {formatar_moeda(v_op2)}")
+        
+        st.write("---")
+        qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
+
+    colA, colB = st.columns(2)
+    colA.button("⬅️ Voltar para Técnica", on_click=ir_para, args=("📝 2. Proposta Técnica",))
+    
+    def tentar_gerar_comercial():
+        st.session_state.tentou_gerar = True
+        
+    colB.button("🚀 VALIDAR E GERAR COMERCIAL", on_click=tentar_gerar_comercial, type="primary")
+
+    if st.session_state.tentou_gerar:
+        if not template_upload:
+            st.error("⚠️ Faça o upload do template da Comercial na barra lateral.")
+        else:
+            mapa_comercial = {
+                "{{SERVICO}}": st.session_state.memoria_geral["servico"], 
+                "{{CLIENTE}}": st.session_state.memoria_geral["cliente"], 
+                "{{UNIDADE}}": st.session_state.memoria_geral["unidade"], 
+                "{{NUM_PROP}}": st.session_state.memoria_geral["num_prop"], 
+                "{{ESCOPO}}": st.session_state.memoria_geral["escopo"],
+                "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
+                "{{JUSTIFICATIVA}}": st.session_state.memoria_geral["justificativa"], 
+                "{{OBJETIVO}}": st.session_state.memoria_geral["objetivo"],
+                "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
+                "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
+                "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
+                "{{VALOR_OP1}}": formatar_moeda(v_op1),
+                "{{VALOR_OP2}}": formatar_moeda(v_op2),
+                "{{VALOR_OP1_EXT}}": valor_por_extenso(v_op1),
+                "{{VALOR_OP2_EXT}}": valor_por_extenso(v_op2),
+                "{{QTD_PARCELAS}}": str(qtd_parcelas),
+                "{{VLR1_PARCELAS}}": formatar_moeda(v_op1/qtd_parcelas) if qtd_parcelas > 0 else "0",
+                "{{VLR2_PARCELAS}}": formatar_moeda(v_op2/qtd_parcelas) if qtd_parcelas > 0 else "0"
+            }
             
-            n_lid_total = n_pr + n_exec + n_coord + n_super + n_lid_extra
-            n_prop = n_lid_total + n_sec + n_oper
-            n_p_terc = n_prop + n_col3 + n_lid3
-
-            st.markdown("### 📊 Contador de População (Ao Vivo)")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Líderes Totais", n_lid_total)
-            m2.metric("Colaboradores Próprios", n_prop)
-            m3.metric("Total (Próprios + Terc.)", n_p_terc, delta=f"+{n_col3 + n_lid3} terceiros")
-
-            st.write("---")
-            cr1, cr2, cr3 = st.columns(3)
-            qtd_rel = cr1.number_input("Qtd de Unidades com Relatório", min_value=0, value=1)
-            tem_corp = cr2.checkbox("Relatório Corporativo?")
-            tot_rel = qtd_rel + (1 if tem_corp else 0)
-            tot_plan = cr3.number_input("Total de PTCs", min_value=0, value=1)
-
-        if st.button("🚀 VALIDAR E GERAR TÉCNICA", on_click=acionar_geracao, key="btn_tecnica"):
-            erros = []
-            if not template_upload: erros.append("Template Original (Upload)")
-            if len(campos_vazios) > 0: erros.extend(campos_vazios)
-            if len(atividades_lista) == 0: erros.append("Pelo menos 1 Fase do Cronograma com meses selecionados")
-
-            if erros:
-                st.error(f"⚠️ IMPOSSÍVEL GERAR! Preencha os campos obrigatórios: {', '.join(erros)}.")
-                st.session_state.pptx_gerado = None
-            else:
-                mapa = {
-                    "{{SERVICO}}": servico, "{{CLIENTE}}": cliente, "{{UNIDADE}}": unidade, 
-                    "{{NUM_PROP}}": num_prop, "{{ESCOPO}}": escopo_tag,
-                    "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
-                    "{{JUSTIFICATIVA}}": justificativa, "{{OBJETIVO}}": objetivo,
-                    "{{PUBLICO}}": str(n_p_terc), "{{PRAZO}}": prazo, "{{FORMATO}}": formato, 
-                    "{{IDIOMA}}": idioma_str, "{{IDAS}}": str(idas),
-                    "{{N_PR}}": str(n_pr), "{{N_EXEC}}": str(n_exec), "{{N_COORD}}": str(n_coord), 
-                    "{{N_SUPER}}": str(n_super), "{{N_LID}}": str(n_lid_total), "{{N_SEC}}": str(n_sec), 
-                    "{{N_OPER}}": str(n_oper), "{{N_PROP}}": str(n_prop), "{{N_COL3}}": str(n_col3), 
-                    "{{N_LID3}}": str(n_lid3), "{{N_PTERC}}": str(n_p_terc),
-                    "{{TOT_REL}}": str(tot_rel), "{{QTD_REL}}": str(qtd_rel), "{{TOT_PLAN}}": str(tot_plan)
-                }
-                
-                with st.spinner("Construindo arquivo..."):
-                    st.session_state.pptx_gerado = processar_apresentacao(template_upload, mapa, atividades_lista, "Técnica", None, qtd_meses_projeto)
-                    st.session_state.nome_arquivo = f"Tecnica_{cliente}.pptx"
-                st.success("Técnica gerada com sucesso! Clique abaixo para baixar.")
-                st.session_state.tentou_gerar = False
-
-        if st.session_state.pptx_gerado and st.session_state.nome_arquivo.startswith("Tecnica"):
-            st.download_button("⬇️ Baixar Documento Gerado", data=st.session_state.pptx_gerado, file_name=st.session_state.nome_arquivo, mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-
-    # ==========================================
-    # APRESENTAÇÃO COMERCIAL
-    # ==========================================
-    elif tipo_apresentacao == "Apresentação Comercial":
-        with st.expander("👥 3. Público Alvo", expanded=True):
-            publico_total = st.number_input("Público Total ({{PUBLICO}})*", min_value=0, value=0)
-            if st.session_state.tentou_gerar and publico_total <= 0:
-                st.error("Campo obrigatório! Informe o público total.")
-                campos_vazios.append("Público Total")
-
-        with st.expander("💰 4. Detalhamento de Investimento e Parcelas", expanded=True):
-            modo_logistica = st.radio("Como a Logística será tratada?", ["Estimada (Soma +30% automático)", "Cotada (Informar manualmente)"])
+            acoes_auto = [{"nome": "Diagnóstico de Cultura e Intervenção", "v1": v_op1, "v2": v_op2}]
+            dist_parcelas = calcular_amortizacao(qtd_parcelas)
             
-            st.write("**Fases de Investimento:**")
-            qtd_acoes = st.number_input("Quantas Macro Ações?", min_value=1, value=3)
+            dados_financeiros = {
+                'acoes': acoes_auto, 
+                'total_op1': v_op1, 
+                'total_op2': v_op2,
+                'parcelas': dist_parcelas
+            }
             
-            acoes_fin = []
-            total_op1 = 0.0
-            total_op2 = 0.0
-            
-            for i in range(qtd_acoes):
-                cf1, cf2, cf3 = st.columns(3)
-                n_acao = cf1.text_input(f"Ação {i+1}", key=f"ac_n_{i}")
-                v1 = cf2.number_input(f"Valor Opção 1 (R$)", min_value=0.0, key=f"ac_v1_{i}", value=0.0)
-                
-                if modo_logistica == "Estimada (Soma +30% automático)":
-                    v2 = v1 * 1.3
-                    ui_v2 = formatar_moeda(v2).replace("$", "\$")
-                    cf3.info(f"Opção 2: {ui_v2}")
-                else:
-                    v2 = cf3.number_input(f"Valor Opção 2 (R$)", min_value=0.0, key=f"ac_v2_{i}", value=0.0)
-                
-                if n_acao:
-                    acoes_fin.append({'nome': n_acao, 'v1': v1, 'v2': v2})
-                    total_op1 += v1
-                    total_op2 += v2
-                elif st.session_state.tentou_gerar:
-                    cf1.error("Obrigatório nomear a ação ou remover quantidade.")
-                    campos_vazios.append(f"Nome da Ação {i+1}")
-            
-            st.markdown("---")
-            ui_op1 = formatar_moeda(total_op1).replace("$", "\$")
-            ui_op2 = formatar_moeda(total_op2).replace("$", "\$")
-            st.markdown(f"**Total OP1:** {ui_op1} | **Total OP2:** {ui_op2}")
-            
-            st.write("**Condições de Pagamento:**")
-            qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
+            with st.spinner("Construindo arquivo..."):
+                st.session_state.pptx_gerado = processar_apresentacao(template_upload, mapa_comercial, [], "Comercial", dados_financeiros, 12)
+                st.session_state.nome_arquivo = f"Comercial_{st.session_state.memoria_geral['cliente']}.pptx"
+            st.success("Comercial gerada com sucesso!")
+            st.session_state.tentou_gerar = False
 
-        if st.button("🚀 VALIDAR E GERAR COMERCIAL", on_click=acionar_geracao, key="btn_comercial"):
-            erros = []
-            if not template_upload: erros.append("Template Original (Upload)")
-            if len(campos_vazios) > 0: erros.extend(campos_vazios)
-            if len(atividades_lista) == 0: erros.append("Pelo menos 1 Fase do Cronograma com meses selecionados")
-            if len(acoes_fin) == 0: erros.append("Pelo menos 1 Ação Financeira nomeada")
-
-            if erros:
-                st.error(f"⚠️ IMPOSSÍVEL GERAR! Preencha os campos obrigatórios: {', '.join(erros)}.")
-                st.session_state.pptx_gerado = None
-            else:
-                mapa_comercial = {
-                    "{{SERVICO}}": servico, "{{CLIENTE}}": cliente, "{{UNIDADE}}": unidade, 
-                    "{{NUM_PROP}}": num_prop, "{{ESCOPO}}": escopo_tag,
-                    "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
-                    "{{JUSTIFICATIVA}}": justificativa, "{{OBJETIVO}}": objetivo,
-                    "{{PUBLICO}}": str(publico_total), 
-                    "{{PRAZO}}": prazo, "{{FORMATO}}": formato, "{{IDIOMA}}": idioma_str, "{{IDAS}}": str(idas),
-                    "{{VALOR_OP1}}": formatar_moeda(total_op1),
-                    "{{VALOR_OP2}}": formatar_moeda(total_op2),
-                    "{{VALOR_OP1_EXT}}": valor_por_extenso(total_op1),
-                    "{{VALOR_OP2_EXT}}": valor_por_extenso(total_op2),
-                    "{{QTD_PARCELAS}}": str(qtd_parcelas),
-                    "{{VLR1_PARCELAS}}": formatar_moeda(total_op1/qtd_parcelas),
-                    "{{VLR2_PARCELAS}}": formatar_moeda(total_op2/qtd_parcelas)
-                }
-                
-                dist_parcelas = calcular_amortizacao(qtd_parcelas)
-                dados_financeiros = {
-                    'acoes': acoes_fin, 
-                    'total_op1': total_op1, 
-                    'total_op2': total_op2,
-                    'parcelas': dist_parcelas
-                }
-                
-                with st.spinner("Construindo arquivo..."):
-                    st.session_state.pptx_gerado = processar_apresentacao(template_upload, mapa_comercial, atividades_lista, "Comercial", dados_financeiros, qtd_meses_projeto)
-                    st.session_state.nome_arquivo = f"Comercial_{cliente}.pptx"
-                st.success("Comercial gerada com sucesso! Clique abaixo para baixar.")
-                st.session_state.tentou_gerar = False
-
-        if st.session_state.pptx_gerado and st.session_state.nome_arquivo.startswith("Comercial"):
-            st.download_button("⬇️ Baixar Documento Gerado", data=st.session_state.pptx_gerado, file_name=st.session_state.nome_arquivo, mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+    if st.session_state.pptx_gerado and st.session_state.nome_arquivo.startswith("Comercial"):
+        st.download_button("⬇️ Baixar PPTX Comercial", data=st.session_state.pptx_gerado, file_name=st.session_state.nome_arquivo)
