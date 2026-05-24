@@ -142,6 +142,8 @@ def render_precificacao():
     ])
     
     logistica_total = 0.0
+    qtd_idas = 0
+    detalhes_log = {}
     
     if tipo_logistica == "1. Sem Logística (100% Online ou Cliente assume)":
         logistica_total = 0.0
@@ -149,6 +151,7 @@ def render_precificacao():
     elif tipo_logistica == "2. Logística Estimada (Percentual %)":
         perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=15)
         logistica_total = valor_op1 * (perc_logistica / 100)
+        detalhes_log = {"Percentual Aplicado": f"{perc_logistica}% sobre OP1"}
         st.info(f"Cálculo: {perc_logistica}% sobre o Serviço ({formatar_moeda(valor_op1)}) = {formatar_moeda(logistica_total)}")
 
     elif tipo_logistica == "3. Logística Base (Alimentação + Táxi da Base)":
@@ -158,6 +161,7 @@ def render_precificacao():
         custo_taxi = qtd_idas * (150 * 2)
         custo_alimentacao = qtd_idas * dias_ida * 120
         logistica_total = custo_taxi + custo_alimentacao
+        detalhes_log = {"Táxi (Ida e Volta)": custo_taxi, "Alimentação": custo_alimentacao}
         st.success(f"Táxi: R$ {custo_taxi:,.2f} + Alimentação: R$ {custo_alimentacao:,.2f} = **R$ {logistica_total:,.2f}**")
 
     elif tipo_logistica == "4. Logística Completa (Cotações Detalhadas)":
@@ -204,6 +208,13 @@ def render_precificacao():
         
         logistica_total = custo_hotel + custo_aereo_total + custo_carro_cliente + custo_carro_aero
         
+        detalhes_log = {
+            "Hospedagem": custo_hotel, 
+            "Passagens Aéreas (c/ taxa)": custo_aereo_total,
+            "Carro no Cliente (c/ taxa)": custo_carro_cliente,
+            "Carro até Cliente (c/ taxa)": custo_carro_aero
+        }
+        
         st.info(f"**Resumo da Cotação Detalhada:** \n"
                 f"- Hospedagem: {formatar_moeda(custo_hotel)} \n"
                 f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)} \n"
@@ -213,7 +224,18 @@ def render_precificacao():
 
     valor_op2 = valor_op1 + logistica_total
     
-    st.session_state.valores_finais = {"op1": valor_op1, "op2": valor_op2}
+    # SALVAMENTO NA MEMÓRIA GLOBAAL
+    st.session_state.valores_finais["op1"] = valor_op1
+    st.session_state.valores_finais["op2"] = valor_op2
+    st.session_state.valores_finais["horas_totais"] = total_horas_fases
+    st.session_state.valores_finais["taxa_hora"] = (valor_op1 / total_horas_fases) if total_horas_fases > 0 else 0.0
+    
+    st.session_state.logistica_dados = {
+        "tipo": tipo_logistica,
+        "total": logistica_total,
+        "idas": qtd_idas,
+        "detalhes": detalhes_log
+    }
 
     st.markdown("---")
     st.markdown("### 💰 5. Resumo da Precificação")
@@ -233,3 +255,4 @@ def render_tecnica():
 def render_comercial():
     st.title("📈 3. Proposta Comercial (Pontual)")
     st.info("A geração de PPTX comercial para propostas pontuais será implementada na próxima etapa.")
+    st.button("Avançar para Handover (Operações) ➡️", on_click=ir_para, args=("🤝 4. Handover (Operações)",), type="primary")
