@@ -9,9 +9,8 @@ from ferramentas.utilidades import (
 from ferramentas.pptx_engine import processar_apresentacao
 
 def render_precificacao():
-    st.title("💰 1. Motor de Precificação")
-    servico_prec = st.selectbox("Selecione o Serviço para Precificar:", ["Diagnóstico (DCS/Clima/DCMA)", "Mapeamento de Liderança (MPL)"])
-    st.session_state.servico_selecionado = servico_prec
+    # st.title("💰 1. Motor de Precificação") - Gerenciado no Router
+    servico_prec = st.session_state.servico_selecionado
     
     if servico_prec == "Diagnóstico (DCS/Clima/DCMA)":
         st.markdown("### 📊 1. Cadastro de População e Unidades")
@@ -113,6 +112,8 @@ def render_precificacao():
         ])
         
         logistica_total = 0.0
+        qtd_idas = 0
+        detalhes_log = {}
         
         if tipo_logistica == "1. Sem Logística (100% pelo Cliente)":
             st.info("A Opção 2 terá o mesmo valor da Opção 1, pois o cliente arcará com todos os custos de viagem diretamente.")
@@ -126,20 +127,20 @@ def render_precificacao():
             custo_taxi = qtd_idas * (150 * 2)
             custo_alimentacao = qtd_idas * dias_ida * 120
             logistica_total = custo_taxi + custo_alimentacao
+            detalhes_log = {"Táxi (Ida e Volta)": custo_taxi, "Alimentação": custo_alimentacao}
             
             st.success(f"**Cálculo Base:** {qtd_idas} idas (Táxi: R$ {custo_taxi:,.2f}) + {qtd_idas * dias_ida} dias de alimentação (R$ {custo_alimentacao:,.2f}) = **R$ {logistica_total:,.2f}**")
 
         elif tipo_logistica == "3. Logística Completa (Cotações Detalhadas)":
             c_ida, c_dia = st.columns(2)
             qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-            dias_ida = c_dia.number_input("Dias por Ida (padrão 5)", min_value=1, value=5)
+            dias_ida = c_dia.number_input("Dias por Ida", min_value=1, value=5)
             
             st.markdown("##### 🏨 Hospedagem")
             ch1, ch2 = st.columns(2)
-            hotel_barato = ch1.number_input("Diária - Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
-            hotel_caro = ch2.number_input("Diária - Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
-            media_hotel = (hotel_barato + hotel_caro) / 2
-            custo_hotel = media_hotel * dias_ida * qtd_idas
+            hotel_barato = ch1.number_input("Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
+            hotel_caro = ch2.number_input("Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
+            custo_hotel = ((hotel_barato + hotel_caro) / 2) * dias_ida * qtd_idas
             
             st.markdown("##### ✈️ Passagens Aéreas (+ 10% Taxa)")
             st.caption("Fórmula Média: ((Mais Barata + Mais Cara) * 3.2) / 6")
@@ -174,6 +175,13 @@ def render_precificacao():
             
             logistica_total = custo_hotel + custo_aereo_total + custo_carro_cliente + custo_carro_aero
             
+            detalhes_log = {
+                "Hospedagem": custo_hotel, 
+                "Passagens Aéreas (c/ taxa)": custo_aereo_total,
+                "Carro no Cliente (c/ taxa)": custo_carro_cliente,
+                "Carro até Cliente (c/ taxa)": custo_carro_aero
+            }
+            
             st.info(f"**Resumo da Cotação Detalhada:** \n"
                     f"- Hospedagem: {formatar_moeda(custo_hotel)} \n"
                     f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)} \n"
@@ -184,12 +192,23 @@ def render_precificacao():
         elif tipo_logistica == "4. Logística Estimada (Percentual %)":
             perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
             logistica_total = valor_op1 * (perc_logistica / 100)
+            detalhes_log = {"Percentual Aplicado": f"{perc_logistica}% sobre OP1"}
             st.info(f"Cálculo: {perc_logistica}% sobre o Serviço Técnico ({formatar_moeda(valor_op1)}) = {formatar_moeda(logistica_total)}")
         
         valor_op2 = valor_op1 + logistica_total
         
+        # SALVAMENTO NA MEMÓRIA GLOBAAL
         st.session_state.valores_finais["op1"] = valor_op1
         st.session_state.valores_finais["op2"] = valor_op2
+        st.session_state.valores_finais["horas_totais"] = horas_totais
+        st.session_state.valores_finais["taxa_hora"] = taxa_hora
+        
+        st.session_state.logistica_dados = {
+            "tipo": tipo_logistica,
+            "total": logistica_total,
+            "idas": qtd_idas,
+            "detalhes": detalhes_log
+        }
         
         st.write(f"**Racional da Precificação Técnica:** {total_horas_campo}h (Campo) + {total_horas_fases}h (Plano Detalhado) = **{horas_totais} horas totais de projeto**.")
         
@@ -224,9 +243,17 @@ def render_tecnica():
         st.session_state.memoria_geral["escopo"] = c5.text_input("Título do Escopo ({{ESCOPO}})*", value=st.session_state.memoria_geral.get("escopo", ""))
         st.session_state.memoria_geral["prazo"] = c6.text_input("Prazo ({{PRAZO}})*", value=st.session_state.memoria_geral.get("prazo", ""))
         
-        c7, c8 = st.columns(2)
+        c7, c8, c9 = st.columns([0.3, 0.4, 0.3])
         st.session_state.memoria_geral["formato"] = c7.selectbox("Formato ({{FORMATO}})*", ["Híbrido", "Presencial", "Online"], index=["Híbrido", "Presencial", "Online"].index(st.session_state.memoria_geral.get("formato", "Híbrido")))
-        st.session_state.memoria_geral["idas"] = c8.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=st.session_state.memoria_geral.get("idas", 0))
+        
+        idiomas_selecionados = c8.multiselect("Idioma ({{IDIOMA}})*", ["Português", "Espanhol", "Inglês"], default=["Português"])
+        if len(idiomas_selecionados) == 1: idioma_str = idiomas_selecionados[0]
+        elif len(idiomas_selecionados) == 2: idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
+        elif len(idiomas_selecionados) > 2: idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
+        else: idioma_str = ""
+        st.session_state.memoria_geral["idioma"] = idioma_str
+        
+        st.session_state.memoria_geral["idas"] = c9.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=st.session_state.memoria_geral.get("idas", 0))
         
         st.session_state.memoria_geral["justificativa"] = st.text_area("Justificativa ({{JUSTIFICATIVA}})*", value=st.session_state.memoria_geral.get("justificativa", ""))
         st.session_state.memoria_geral["objetivo"] = st.text_area("Objetivo ({{OBJETIVO}})*", value=st.session_state.memoria_geral.get("objetivo", ""))
@@ -283,6 +310,7 @@ def render_tecnica():
                 "{{PUBLICO}}": str(n_p_terc), 
                 "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
                 "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
+                "{{IDIOMA}}": st.session_state.memoria_geral["idioma"],
                 "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
                 "{{N_LID}}": str(n_lid_total), 
                 "{{N_OPER}}": str(n_oper), 
@@ -319,6 +347,7 @@ def render_comercial():
         
         st.write("---")
         qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
+        st.session_state.valores_finais["qtd_parcelas"] = qtd_parcelas # Salva na memória
 
     colA, colB = st.columns(2)
     colA.button("⬅️ Voltar para Técnica", on_click=ir_para, args=("📝 2. Proposta Técnica",))
@@ -343,6 +372,7 @@ def render_comercial():
                 "{{OBJETIVO}}": st.session_state.memoria_geral["objetivo"],
                 "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
                 "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
+                "{{IDIOMA}}": st.session_state.memoria_geral["idioma"],
                 "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
                 "{{VALOR_OP1}}": formatar_moeda(v_op1),
                 "{{VALOR_OP2}}": formatar_moeda(v_op2),
@@ -371,3 +401,5 @@ def render_comercial():
 
     if st.session_state.pptx_gerado and st.session_state.nome_arquivo.startswith("Comercial"):
         st.download_button("⬇️ Baixar PPTX Comercial", data=st.session_state.pptx_gerado, file_name=st.session_state.nome_arquivo)
+        st.write("")
+        st.button("Avançar para Handover (Operações) ➡️", on_click=ir_para, args=("🤝 4. Handover (Operações)",), type="primary")
