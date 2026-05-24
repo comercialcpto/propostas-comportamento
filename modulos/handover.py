@@ -6,15 +6,20 @@ def render_handover():
     st.title("🤝 4. Handover de Projeto (Operações)")
     st.info("Finalize as informações abaixo para consolidar o Recibo do Projeto para a equipe de Operações.")
     
-    memoria = st.session_state.memoria_geral
-    finais = st.session_state.valores_finais
-    logistica = st.session_state.logistica_dados
+    # O .get() é a nossa rede de segurança. Se não achar, puxa um vazio/zero.
+    memoria = st.session_state.get("memoria_geral", {})
+    finais = st.session_state.get("valores_finais", {})
+    logistica = st.session_state.get("logistica_dados", {"tipo": "Não informado", "total": 0.0, "idas": 0, "detalhes": {}})
     
-    # Busca nomes das unidades dependendo do serviço
-    if st.session_state.servico_selecionado == "Proposta Pontual (Palestras/Workshops)":
-        unidades_str = ", ".join([u["nome"] for u in st.session_state.unidades_pontual])
+    servico_atual = st.session_state.get("servico_selecionado", "Não selecionado")
+
+    # Busca nomes das unidades dependendo do serviço com segurança
+    if servico_atual == "Proposta Pontual (Palestras/Workshops)":
+        unidades = st.session_state.get("unidades_pontual", [{"nome": "Não informada"}])
     else:
-        unidades_str = ", ".join([u["nome"] for u in st.session_state.unidades_dcs])
+        unidades = st.session_state.get("unidades_dcs", [{"nome": "Não informada"}])
+        
+    unidades_str = ", ".join([u["nome"] for u in unidades])
 
     # --- CAMPOS MANUAIS DO COMERCIAL ---
     with st.expander("📝 1. Preenchimento de Dados Operacionais", expanded=True):
@@ -42,23 +47,30 @@ def render_handover():
     # --- GERAÇÃO DA TABELA VISUAL ---
     st.markdown("### 📋 Resumo Consolidado (Recibo)")
     
+    idas = logistica.get("idas", 0)
+    total_log = logistica.get("total", 0.0)
+    
     # Regra do valor por deslocamento
     valor_deslocamento = "R$ 0,00"
-    if logistica["idas"] > 0:
-        valor_deslocamento = formatar_moeda(logistica["total"] / logistica["idas"])
+    if idas > 0:
+        valor_deslocamento = formatar_moeda(total_log / idas)
     
     # Construção da visualização da Logística conforme regra
-    texto_logistica = f"Tipo: {logistica['tipo']}\n"
-    if "Completa" in logistica['tipo']:
-        for item, valor in logistica['detalhes'].items():
+    tipo_log = logistica.get("tipo", "")
+    texto_logistica = f"Tipo: {tipo_log}\n"
+    
+    if "Completa" in tipo_log:
+        detalhes = logistica.get('detalhes', {})
+        for item, valor in detalhes.items():
             texto_logistica += f" - {item}: {formatar_moeda(valor)}\n"
-        texto_logistica += f"\nCusto Total Logística: {formatar_moeda(logistica['total'])}"
-    elif "Estimada" in logistica['tipo']:
-        texto_logistica += f"Margem aplicada: {logistica['detalhes'].get('Percentual Aplicado', '')} \nCusto Total Estimado: {formatar_moeda(logistica['total'])}"
-    elif "Base" in logistica['tipo']:
-        texto_logistica += f" - Táxi/Alimentação \nCusto Total Base: {formatar_moeda(logistica['total'])}"
+        texto_logistica += f"\nCusto Total Logística: {formatar_moeda(total_log)}"
+    elif "Estimada" in tipo_log:
+        perc = logistica.get('detalhes', {}).get('Percentual Aplicado', '')
+        texto_logistica += f"Margem aplicada: {perc} \nCusto Total Estimado: {formatar_moeda(total_log)}"
+    elif "Base" in tipo_log:
+        texto_logistica += f" - Táxi/Alimentação \nCusto Total Base: {formatar_moeda(total_log)}"
     else:
-        texto_logistica += "Cliente assume todos os custos."
+        texto_logistica += "Cliente assume todos os custos (ou Sem Logística)."
 
     # Tabela principal de Informações Comerciais
     dados_tabela = {
@@ -71,12 +83,28 @@ def render_handover():
             "Contato", "E-mail", "Telefone"
         ],
         "Informação": [
-            memoria["num_prop"], memoria["cliente"], unidades_str, memoria["servico"], memoria["idioma"],
-            f"{finais['horas_totais']} horas", memoria["formato"], formatar_moeda(finais["op2"]), formatar_moeda(finais["taxa_hora"]),
-            cc_alim, cc_hotel, f"{logistica['idas']} deslocamento(s)",
-            memoria["prazo"], prazo_inicio, caminho_drive, lanc_meta,
-            f"{finais['qtd_parcelas']} Parcela(s)", observacoes, sugestao_reuniao, continuidade_gestor,
-            contato_nome, contato_email, contato_tel
+            memoria.get("num_prop", ""), 
+            memoria.get("cliente", ""), 
+            unidades_str, 
+            servico_atual, 
+            memoria.get("idioma", "Português"),
+            f"{finais.get('horas_totais', 0)} horas", 
+            memoria.get("formato", "Híbrido"), 
+            formatar_moeda(finais.get("op2", 0.0)), 
+            formatar_moeda(finais.get("taxa_hora", 0.0)),
+            cc_alim, cc_hotel, 
+            f"{idas} deslocamento(s)",
+            memoria.get("prazo", ""), 
+            prazo_inicio, 
+            caminho_drive, 
+            lanc_meta,
+            f"{finais.get('qtd_parcelas', 1)} Parcela(s)", 
+            observacoes, 
+            sugestao_reuniao, 
+            continuidade_gestor,
+            contato_nome, 
+            contato_email, 
+            contato_tel
         ]
     }
     
