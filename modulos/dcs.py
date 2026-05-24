@@ -81,7 +81,7 @@ def render_precificacao():
         st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais)")
         st.info("Personalize as etapas fixas e operacionais do projeto. As horas cadastradas aqui serão somadas à coleta de campo.")
         
-        taxa_hora = st.number_input("Valor da Taxa Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0, key="taxa_hora_topo")
+        taxa_hora = st.number_input("Valor da Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0, key="taxa_hora_topo")
 
         total_horas_fases = 0
         for fase in st.session_state.fases_dcs:
@@ -96,7 +96,7 @@ def render_precificacao():
         st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
 
         valor_parcial_fases = total_horas_fases * taxa_hora
-        st.success(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Taxa de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**.")
+        st.success(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**.")
 
         st.markdown("---")
         st.markdown("### 💰 4. Precificação Final e Logística")
@@ -141,36 +141,45 @@ def render_precificacao():
             media_hotel = (hotel_barato + hotel_caro) / 2
             custo_hotel = media_hotel * dias_ida * qtd_idas
             
-            st.markdown("##### ✈️ Passagens Aéreas")
-            st.caption("A fórmula = ((Barato + Caro) * 3.2) / 6 será aplicada automaticamente.")
-            qtd_trechos = st.number_input("Quantos trechos aéreos diferentes?", min_value=0, value=1)
-            custo_aereo_total = 0.0
-            for i in range(int(qtd_trechos)):
-                ca1, ca2 = st.columns(2)
-                aereo_barato = ca1.number_input(f"Trecho {i+1} - Mais Barato (R$)", min_value=0.0, step=50.0, key=f"ab_{i}")
-                aereo_caro = ca2.number_input(f"Trecho {i+1} - Mais Caro (R$)", min_value=0.0, step=50.0, key=f"ac_{i}")
-                media_aereo = ((aereo_barato + aereo_caro) * 3.2) / 6
-                custo_aereo_total += (media_aereo * qtd_idas)
+            st.markdown("##### ✈️ Passagens Aéreas (+ 10% Taxa)")
+            st.caption("Fórmula Média: ((Mais Barata + Mais Cara) * 3.2) / 6")
+            ca1, ca2 = st.columns(2)
+            ida_barata = ca1.number_input("Ida: Mais Barata (R$)", min_value=0.0, step=50.0, key="ida_b_dcs")
+            ida_cara = ca2.number_input("Ida: Mais Cara (R$)", min_value=0.0, step=50.0, key="ida_c_dcs")
+            
+            ca3, ca4 = st.columns(2)
+            volta_barata = ca3.number_input("Volta: Mais Barata (R$)", min_value=0.0, step=50.0, key="volta_b_dcs")
+            volta_cara = ca4.number_input("Volta: Mais Cara (R$)", min_value=0.0, step=50.0, key="volta_c_dcs")
+            
+            media_ida = ((ida_barata + ida_cara) * 3.2) / 6
+            media_volta = ((volta_barata + volta_cara) * 3.2) / 6
+            custo_aereo_total = (media_ida + media_volta) * 1.10 * qtd_idas
 
-            st.markdown("##### 🚗 Locação de Veículo e Deslocamentos")
+            st.markdown("##### 🚗 Carro: No Cliente (Hotel ⇄ Cliente) (+ 10% Taxa)")
             cv1, cv2 = st.columns(2)
-            diaria_carro = cv1.number_input("Valor da Diária do Carro (R$)", min_value=0.0, step=10.0)
-            custo_carro = diaria_carro * dias_ida * qtd_idas
+            diaria_carro = cv1.number_input("Valor da Diária do Carro (R$)", min_value=0.0, step=10.0, key="diaria_c_dcs")
+            dist_hotel_cliente = cv2.number_input("Dist. Hotel ⇄ Cliente (Km Total Dia)", min_value=0.0, step=5.0, key="dist_h_dcs")
             
-            dist_hotel_cliente = cv2.number_input("Distância Hotel ⇄ Cliente (Km - Total Ida e Volta diária)", min_value=0.0, step=5.0)
-            custo_combustivel_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida * qtd_idas
+            custo_diarias = diaria_carro * dias_ida
+            custo_comb_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida
+            custo_carro_cliente = (custo_diarias + custo_comb_hotel) * 1.10 * qtd_idas
             
-            st.markdown("##### 🛣️ Aeroporto até o Cliente")
+            st.markdown("##### 🛣️ Carro: Até o Cliente (Aeroporto ⇄ Destino) (+ 10% Taxa)")
             cae1, cae2 = st.columns(2)
-            dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Cliente (Km - Total Ida e Volta da viagem)", min_value=0.0, step=10.0)
-            pedagio_aero = cae2.number_input("Valor Pedágios Aeroporto ⇄ Cliente (R$ Total)", min_value=0.0, step=5.0)
+            dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Destino (Km Total Ida e Volta)", min_value=0.0, step=10.0, key="dist_a_dcs")
+            pedagio_aero = cae2.number_input("Pedágios (R$ Totais)", min_value=0.0, step=5.0, key="ped_a_dcs")
             
-            custo_combustivel_aero = (dist_aero_cliente / 9.0) * 6.0 * qtd_idas
-            custo_pedagio = pedagio_aero * qtd_idas
+            custo_comb_aero = (dist_aero_cliente / 9.0) * 6.0
+            custo_carro_aero = (pedagio_aero + custo_comb_aero) * 1.10 * qtd_idas
             
-            logistica_total = custo_hotel + custo_aereo_total + custo_carro + custo_combustivel_hotel + custo_combustivel_aero + custo_pedagio
+            logistica_total = custo_hotel + custo_aereo_total + custo_carro_cliente + custo_carro_aero
             
-            st.info(f"**Resumo Logística Cotação:** Hospedagem (R$ {custo_hotel:,.2f}) + Aéreo (R$ {custo_aereo_total:,.2f}) + Carro (R$ {custo_carro:,.2f}) + Combustível (R$ {(custo_combustivel_hotel+custo_combustivel_aero):,.2f}) + Pedágio (R$ {custo_pedagio:,.2f}) = **R$ {logistica_total:,.2f}**")
+            st.info(f"**Resumo da Cotação Detalhada:** \n"
+                    f"- Hospedagem: {formatar_moeda(custo_hotel)} \n"
+                    f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)} \n"
+                    f"- Carro no Cliente (com taxa): {formatar_moeda(custo_carro_cliente)} \n"
+                    f"- Deslocamento Aeroporto (com taxa): {formatar_moeda(custo_carro_aero)} \n"
+                    f"**Total Logística: {formatar_moeda(logistica_total)}**")
 
         elif tipo_logistica == "4. Logística Estimada (Percentual %)":
             perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
