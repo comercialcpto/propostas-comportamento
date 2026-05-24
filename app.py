@@ -8,7 +8,9 @@ st.set_page_config(page_title="Sistema Comportamento", layout="wide")
 if "pptx_gerado" not in st.session_state: st.session_state.pptx_gerado = None
 if "nome_arquivo" not in st.session_state: st.session_state.nome_arquivo = ""
 if 'tentou_gerar' not in st.session_state: st.session_state.tentou_gerar = False
-if 'current_page' not in st.session_state: st.session_state.current_page = "🏠 Início"
+
+if 'current_page' not in st.session_state: 
+    st.session_state.current_page = "🏠 Início"
 
 if 'unidades_dcs' not in st.session_state: 
     st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
@@ -36,8 +38,9 @@ if 'valores_finais' not in st.session_state:
 # --- 2. MENU LATERAL ---
 st.sidebar.title("🧭 Navegação Integrada")
 menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial"]
-selecao_menu = st.sidebar.radio("Etapa do Projeto:", menu_options, index=menu_options.index(st.session_state.current_page))
-st.session_state.current_page = selecao_menu
+
+# A MÁGICA ACONTECE AQUI: O parâmetro 'key' liga o menu direto à memória global!
+st.sidebar.radio("Etapa do Projeto:", menu_options, key="current_page")
 
 
 # --- 3. ROTEADOR DE PÁGINAS ---
