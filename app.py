@@ -1,6 +1,6 @@
 import streamlit as st
 from ferramentas.utilidades import ir_para
-from modulos import dcs, pontual
+from modulos import dcs, pontual, handover
 
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
 
@@ -41,22 +41,25 @@ if 'fases_pontual' not in st.session_state:
 if 'carrinho_pontual' not in st.session_state:
     st.session_state.carrinho_pontual = []
 
-# --- Memória Geral ---
+# --- Memória Geral e Logística ---
 if 'memoria_geral' not in st.session_state:
     st.session_state.memoria_geral = {
         "cliente": "", "unidade": "", "num_prop": "", "escopo": "", "prazo": "", 
-        "formato": "Híbrido", "justificativa": "", "objetivo": "", "idas": 0
+        "formato": "Híbrido", "justificativa": "", "objetivo": "", "idas": 0, "idioma": "Português"
     }
 
 if 'valores_finais' not in st.session_state:
-    st.session_state.valores_finais = {"op1": 0.0, "op2": 0.0}
+    st.session_state.valores_finais = {"op1": 0.0, "op2": 0.0, "horas_totais": 0, "taxa_hora": 0.0, "qtd_parcelas": 1}
+
+if 'logistica_dados' not in st.session_state:
+    st.session_state.logistica_dados = {"tipo": "", "total": 0.0, "idas": 0, "detalhes": {}}
 
 if 'servico_selecionado' not in st.session_state:
     st.session_state.servico_selecionado = "Diagnóstico (DCS/Clima/DCMA)"
 
 # --- 2. MENU LATERAL ---
 st.sidebar.title("🧭 Navegação Integrada")
-menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial"]
+menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial", "🤝 4. Handover (Operações)"]
 st.sidebar.radio("Etapa do Projeto:", menu_options, key="current_page")
 
 
@@ -95,3 +98,6 @@ elif st.session_state.current_page == "📈 3. Proposta Comercial":
         pontual.render_comercial()
     else:
         dcs.render_comercial()
+
+elif st.session_state.current_page == "🤝 4. Handover (Operações)":
+    handover.render_handover()
