@@ -1,6 +1,6 @@
 import streamlit as st
 from ferramentas.utilidades import ir_para
-from modulos import dcs
+from modulos import dcs, pontual
 
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
 
@@ -12,6 +12,7 @@ if 'tentou_gerar' not in st.session_state: st.session_state.tentou_gerar = False
 if 'current_page' not in st.session_state: 
     st.session_state.current_page = "🏠 Início"
 
+# --- Memória DCS ---
 if 'unidades_dcs' not in st.session_state: 
     st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
 
@@ -25,6 +26,22 @@ if 'fases_dcs' not in st.session_state:
         {"id": 5, "nome": "Suporte e Acompanhamento", "horas": 64}
     ]
 
+# --- Memória Pontual ---
+if 'unidades_pontual' not in st.session_state: 
+    st.session_state.unidades_pontual = [{"id": 0, "nome": "Público Geral", "pop_total": 0, "lideres": 0}]
+
+if 'fases_pontual' not in st.session_state:
+    st.session_state.fases_pontual = [
+        {"id": 0, "nome": "Abertura de Projeto", "horas": 2},
+        {"id": 1, "nome": "Desenvolvimento dos materiais", "horas": 8},
+        {"id": 2, "nome": "Palestra ou Workshop", "horas": 2},
+        {"id": 3, "nome": "Análise Crítica", "horas": 2}
+    ]
+
+if 'carrinho_pontual' not in st.session_state:
+    st.session_state.carrinho_pontual = []
+
+# --- Memória Geral ---
 if 'memoria_geral' not in st.session_state:
     st.session_state.memoria_geral = {
         "cliente": "", "unidade": "", "num_prop": "", "escopo": "", "prazo": "", 
@@ -34,12 +51,12 @@ if 'memoria_geral' not in st.session_state:
 if 'valores_finais' not in st.session_state:
     st.session_state.valores_finais = {"op1": 0.0, "op2": 0.0}
 
+if 'servico_selecionado' not in st.session_state:
+    st.session_state.servico_selecionado = "Diagnóstico (DCS/Clima/DCMA)"
 
 # --- 2. MENU LATERAL ---
 st.sidebar.title("🧭 Navegação Integrada")
 menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial"]
-
-# A MÁGICA ACONTECE AQUI: O parâmetro 'key' liga o menu direto à memória global!
 st.sidebar.radio("Etapa do Projeto:", menu_options, key="current_page")
 
 
@@ -50,10 +67,31 @@ if st.session_state.current_page == "🏠 Início":
     st.button("🚀 Iniciar Novo Projeto (Ir para Precificação)", on_click=ir_para, args=("💰 1. Precificação",))
 
 elif st.session_state.current_page == "💰 1. Precificação":
-    dcs.render_precificacao()
+    st.title("💰 1. Motor de Precificação")
+    
+    servico = st.selectbox(
+        "Selecione o Serviço para Precificar:", 
+        ["Diagnóstico (DCS/Clima/DCMA)", "Proposta Pontual (Palestras/Workshops)", "Mapeamento de Liderança (MPL)"],
+        index=["Diagnóstico (DCS/Clima/DCMA)", "Proposta Pontual (Palestras/Workshops)", "Mapeamento de Liderança (MPL)"].index(st.session_state.servico_selecionado)
+    )
+    st.session_state.servico_selecionado = servico
+    st.markdown("---")
+    
+    if servico == "Diagnóstico (DCS/Clima/DCMA)":
+        dcs.render_precificacao()
+    elif servico == "Proposta Pontual (Palestras/Workshops)":
+        pontual.render_precificacao()
+    else:
+        st.info("Módulo em desenvolvimento.")
 
 elif st.session_state.current_page == "📝 2. Proposta Técnica":
-    dcs.render_tecnica()
+    if st.session_state.servico_selecionado == "Proposta Pontual (Palestras/Workshops)":
+        pontual.render_tecnica()
+    else:
+        dcs.render_tecnica()
 
 elif st.session_state.current_page == "📈 3. Proposta Comercial":
-    dcs.render_comercial()
+    if st.session_state.servico_selecionado == "Proposta Pontual (Palestras/Workshops)":
+        pontual.render_comercial()
+    else:
+        dcs.render_comercial()
