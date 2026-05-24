@@ -165,22 +165,51 @@ def render_precificacao():
         qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
         dias_ida = c_dia.number_input("Dias por Ida", min_value=1, value=1)
         
+        st.markdown("##### 🏨 Hospedagem")
         ch1, ch2 = st.columns(2)
-        media_hotel = (ch1.number_input("Hotel Mais Barato (R$)", step=10.0) + ch2.number_input("Hotel Mais Caro (R$)", step=10.0)) / 2
+        hotel_barato = ch1.number_input("Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
+        hotel_caro = ch2.number_input("Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
+        custo_hotel = ((hotel_barato + hotel_caro) / 2) * dias_ida * qtd_idas
         
+        st.markdown("##### ✈️ Passagens Aéreas (+ 10% Taxa)")
+        st.caption("Fórmula Média: ((Mais Barata + Mais Cara) * 3.2) / 6")
         ca1, ca2 = st.columns(2)
-        media_aereo = ((ca1.number_input("Aéreo Mais Barato (R$)", step=50.0) + ca2.number_input("Aéreo Mais Caro (R$)", step=50.0)) * 3.2) / 6
+        ida_barata = ca1.number_input("Ida: Mais Barata (R$)", min_value=0.0, step=50.0, key="ida_b_pont")
+        ida_cara = ca2.number_input("Ida: Mais Cara (R$)", min_value=0.0, step=50.0, key="ida_c_pont")
         
+        ca3, ca4 = st.columns(2)
+        volta_barata = ca3.number_input("Volta: Mais Barata (R$)", min_value=0.0, step=50.0, key="volta_b_pont")
+        volta_cara = ca4.number_input("Volta: Mais Cara (R$)", min_value=0.0, step=50.0, key="volta_c_pont")
+        
+        media_ida = ((ida_barata + ida_cara) * 3.2) / 6
+        media_volta = ((volta_barata + volta_cara) * 3.2) / 6
+        custo_aereo_total = (media_ida + media_volta) * 1.10 * qtd_idas
+
+        st.markdown("##### 🚗 Carro: No Cliente (Hotel ⇄ Cliente) (+ 10% Taxa)")
         cv1, cv2 = st.columns(2)
-        diaria_carro = cv1.number_input("Diária Carro (R$)", step=10.0)
-        dist_hotel_cliente = cv2.number_input("Dist. Hotel ⇄ Cliente (Km)", step=5.0)
+        diaria_carro = cv1.number_input("Valor da Diária (R$)", min_value=0.0, step=10.0, key="diaria_c_pont")
+        dist_hotel_cliente = cv2.number_input("Dist. Hotel ⇄ Cliente (Km Total Dia)", min_value=0.0, step=5.0, key="dist_h_pont")
         
+        custo_diarias = diaria_carro * dias_ida
+        custo_comb_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida
+        custo_carro_cliente = (custo_diarias + custo_comb_hotel) * 1.10 * qtd_idas
+        
+        st.markdown("##### 🛣️ Carro: Até o Cliente (Aeroporto ⇄ Destino) (+ 10% Taxa)")
         cae1, cae2 = st.columns(2)
-        dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Cliente (Km)", step=10.0)
-        pedagio_aero = cae2.number_input("Pedágios (R$)", step=5.0)
+        dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Destino (Km Total Ida e Volta)", min_value=0.0, step=10.0, key="dist_a_pont")
+        pedagio_aero = cae2.number_input("Pedágios (R$ Totais)", min_value=0.0, step=5.0, key="ped_a_pont")
         
-        logistica_total = (media_hotel * dias_ida * qtd_idas) + (media_aereo * qtd_idas) + (diaria_carro * dias_ida * qtd_idas) + (((dist_hotel_cliente + dist_aero_cliente) / 9.0) * 6.0 * dias_ida * qtd_idas) + (pedagio_aero * qtd_idas)
-        st.info(f"Total estimado da Cotação Completa: **{formatar_moeda(logistica_total)}**")
+        custo_comb_aero = (dist_aero_cliente / 9.0) * 6.0
+        custo_carro_aero = (pedagio_aero + custo_comb_aero) * 1.10 * qtd_idas
+        
+        logistica_total = custo_hotel + custo_aereo_total + custo_carro_cliente + custo_carro_aero
+        
+        st.info(f"**Resumo da Cotação Detalhada:** \n"
+                f"- Hospedagem: {formatar_moeda(custo_hotel)} \n"
+                f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)} \n"
+                f"- Carro no Cliente (com taxa): {formatar_moeda(custo_carro_cliente)} \n"
+                f"- Deslocamento Aeroporto (com taxa): {formatar_moeda(custo_carro_aero)} \n"
+                f"**Total Logística: {formatar_moeda(logistica_total)}**")
 
     valor_op2 = valor_op1 + logistica_total
     
