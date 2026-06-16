@@ -1,8 +1,10 @@
 import streamlit as st
 from ferramentas.utilidades import ir_para
+from ferramentas import estilo
 from modulos import dcs, pontual, handover
 
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
+estilo.aplicar_estilo()
 
 # =====================================================================
 # REGISTRO CENTRAL DE SERVIÇOS
@@ -22,6 +24,16 @@ SERVICOS = {
     "Mapeamento de Liderança (MPL)": {
         "modulo": None, "template": "template_mpl.pptx", "disponivel": False,
     },
+}
+
+# Rótulos limpos para a navegação (o VALOR continua sendo a string original,
+# para não quebrar as referências a current_page espalhadas nos módulos).
+PAGINAS = {
+    "🏠 Início": "Início",
+    "💰 1. Precificação": "1 · Precificação",
+    "📝 2. Proposta Técnica": "2 · Proposta Técnica",
+    "📈 3. Proposta Comercial": "3 · Proposta Comercial",
+    "🤝 4. Handover (Operações)": "4 · Handover",
 }
 
 
@@ -90,47 +102,72 @@ if 'servico_selecionado' not in st.session_state:
     st.session_state.servico_selecionado = list(SERVICOS.keys())[0]
 
 # --- 2. MENU LATERAL ---
-st.sidebar.title("🧭 Navegação Integrada")
-menu_options = ["🏠 Início", "💰 1. Precificação", "📝 2. Proposta Técnica", "📈 3. Proposta Comercial", "🤝 4. Handover (Operações)"]
-st.sidebar.radio("Etapa do Projeto:", menu_options, key="current_page")
+estilo.marca_sidebar()
+st.sidebar.radio(
+    "Navegação",
+    list(PAGINAS.keys()),
+    key="current_page",
+    format_func=lambda x: PAGINAS[x],
+    label_visibility="collapsed",
+)
 
 
 # --- 3. ROTEADOR DE PÁGINAS ---
 if st.session_state.current_page == "🏠 Início":
-    st.title("Bem-vindo ao Sistema Integrado - Comportamento")
-    st.write("Siga o fluxo integrado: calcule os custos, gere a proposta técnica e, em seguida, a comercial. Os dados acompanham-no!")
-    st.button("🚀 Iniciar Novo Projeto (Ir para Precificação)", on_click=ir_para, args=("💰 1. Precificação",))
+    st.markdown(
+        '<div class="cpto-head">'
+        '<div class="cpto-eyebrow">Console de propostas</div>'
+        '<h1 class="cpto-title">Do cálculo ao PPTX, num fluxo só.</h1>'
+        '<p class="cpto-sub">Precifique com o racional à mostra, gere a proposta técnica '
+        'e comercial e feche o handover para operações — os dados acompanham você em cada etapa.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.2rem 0 1.6rem;">'
+        '<span class="cpto-step">1 · Precificação</span>'
+        '<span class="cpto-step">2 · Técnica</span>'
+        '<span class="cpto-step">3 · Comercial</span>'
+        '<span class="cpto-step">4 · Handover</span>'
+        '</div>'
+        "<style>.cpto-step{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:600;"
+        "color:var(--slate);background:var(--surface);border:1px solid var(--line);"
+        "border-radius:.5rem;padding:.4rem .7rem;}</style>",
+        unsafe_allow_html=True,
+    )
+
+    st.button("Iniciar novo projeto", on_click=ir_para, args=("💰 1. Precificação",), type="primary")
 
 elif st.session_state.current_page == "💰 1. Precificação":
-    st.title("💰 1. Motor de Precificação")
+    estilo.cabecalho("Precificação", "Escolha o serviço e construa o investimento com o racional aberto.", etapa="Etapa 1")
 
     servico = st.selectbox(
-        "Selecione o Serviço para Precificar:",
+        "Serviço",
         list(SERVICOS.keys()),
-        index=list(SERVICOS.keys()).index(servico_atual())
+        key="servico_selecionado",
     )
-    st.session_state.servico_selecionado = servico
     st.markdown("---")
 
     info = SERVICOS[servico]
     if info["disponivel"]:
         info["modulo"].render_precificacao()
     else:
-        st.info("🚧 Módulo em desenvolvimento. Em breve disponível por aqui.")
+        st.info("Módulo em desenvolvimento. Em breve disponível por aqui.")
 
 elif st.session_state.current_page == "📝 2. Proposta Técnica":
     mod = modulo_atual()
     if mod:
         mod.render_tecnica()
     else:
-        st.info("🚧 Este serviço ainda não tem Proposta Técnica implementada.")
+        st.info("Este serviço ainda não tem Proposta Técnica implementada.")
 
 elif st.session_state.current_page == "📈 3. Proposta Comercial":
     mod = modulo_atual()
     if mod:
         mod.render_comercial()
     else:
-        st.info("🚧 Este serviço ainda não tem Proposta Comercial implementada.")
+        st.info("Este serviço ainda não tem Proposta Comercial implementada.")
 
 elif st.session_state.current_page == "🤝 4. Handover (Operações)":
     handover.render_handover()
