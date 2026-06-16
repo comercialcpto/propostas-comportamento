@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from ferramentas.utilidades import formatar_moeda, ir_para
+from ferramentas.utilidades import formatar_moeda, ir_para, esc_md
 from ferramentas.logistica import render_logistica
 from ferramentas import config
 
@@ -90,7 +90,7 @@ def render_precificacao():
         })
         st.rerun()
 
-    col_vlr.markdown(f"**Valor do item selecionado:** {qtd_sel}x de {formatar_moeda(valor_unitario)} = **{formatar_moeda(valor_total_item)}**")
+    col_vlr.markdown(esc_md(f"**Valor do item selecionado:** {qtd_sel}x de {formatar_moeda(valor_unitario)} = **{formatar_moeda(valor_total_item)}**"))
 
     # Exibe o Carrinho
     if len(st.session_state.carrinho_pontual) == 0:
@@ -100,12 +100,12 @@ def render_precificacao():
         for idx, item in enumerate(st.session_state.carrinho_pontual):
             rc1, rc2, rc3 = st.columns([0.7, 0.2, 0.1])
             rc1.write(f"**{item['Qtd']}x {item['Item']}** ({item['Detalhe']} - {item['Formato']})")
-            rc2.write(f"{formatar_moeda(item['Subtotal'])}")
+            rc2.write(esc_md(f"{formatar_moeda(item['Subtotal'])}"))
             if rc3.button("🗑️", key=f"del_pontual_{idx}"):
                 st.session_state.carrinho_pontual.pop(idx)
                 st.rerun()
         valor_op1 = sum(item["Subtotal"] for item in st.session_state.carrinho_pontual)
-        st.success(f"**Total Financeiro do Escopo (OP1):** {formatar_moeda(valor_op1)}")
+        st.success(esc_md(f"**Total Financeiro do Escopo (OP1):** {formatar_moeda(valor_op1)}"))
 
     st.markdown("---")
 
