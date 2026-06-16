@@ -4,16 +4,48 @@ from modulos import dcs, pontual, handover
 
 st.set_page_config(page_title="Sistema Comportamento", layout="wide")
 
+# =====================================================================
+# REGISTRO CENTRAL DE SERVIÇOS
+# ---------------------------------------------------------------------
+# Para adicionar um módulo novo (MAC, RPS, Pulse...), basta:
+#   1. Criar modulos/novo.py com render_precificacao/tecnica/comercial
+#   2. Importar acima e adicionar UMA entrada aqui.
+# O 'template' já fica registrado para a futura troca dinâmica de PPTX.
+# =====================================================================
+SERVICOS = {
+    "Diagnóstico (DCS/Clima/DCMA)": {
+        "modulo": dcs, "template": "template_dcs.pptx", "disponivel": True,
+    },
+    "Proposta Pontual (Palestras/Workshops)": {
+        "modulo": pontual, "template": "template_pontual.pptx", "disponivel": True,
+    },
+    "Mapeamento de Liderança (MPL)": {
+        "modulo": None, "template": "template_mpl.pptx", "disponivel": False,
+    },
+}
+
+
+def servico_atual():
+    return st.session_state.get("servico_selecionado", list(SERVICOS.keys())[0])
+
+
+def modulo_atual():
+    info = SERVICOS.get(servico_atual())
+    if info and info["disponivel"]:
+        return info["modulo"]
+    return None
+
+
 # --- 1. INICIALIZAÇÃO DE VARIÁVEIS GLOBAIS (MEMÓRIA) ---
 if "pptx_gerado" not in st.session_state: st.session_state.pptx_gerado = None
 if "nome_arquivo" not in st.session_state: st.session_state.nome_arquivo = ""
 if 'tentou_gerar' not in st.session_state: st.session_state.tentou_gerar = False
 
-if 'current_page' not in st.session_state: 
+if 'current_page' not in st.session_state:
     st.session_state.current_page = "🏠 Início"
 
 # --- Memória DCS ---
-if 'unidades_dcs' not in st.session_state: 
+if 'unidades_dcs' not in st.session_state:
     st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
 
 if 'fases_dcs' not in st.session_state:
@@ -27,7 +59,7 @@ if 'fases_dcs' not in st.session_state:
     ]
 
 # --- Memória Pontual ---
-if 'unidades_pontual' not in st.session_state: 
+if 'unidades_pontual' not in st.session_state:
     st.session_state.unidades_pontual = [{"id": 0, "nome": "Público Geral", "pop_total": 0, "lideres": 0}]
 
 if 'fases_pontual' not in st.session_state:
@@ -44,7 +76,7 @@ if 'carrinho_pontual' not in st.session_state:
 # --- Memória Geral e Logística ---
 if 'memoria_geral' not in st.session_state:
     st.session_state.memoria_geral = {
-        "cliente": "", "unidade": "", "num_prop": "", "escopo": "", "prazo": "", 
+        "cliente": "", "unidade": "", "num_prop": "", "escopo": "", "prazo": "",
         "formato": "Híbrido", "justificativa": "", "objetivo": "", "idas": 0, "idioma": "Português"
     }
 
@@ -55,7 +87,7 @@ if 'logistica_dados' not in st.session_state:
     st.session_state.logistica_dados = {"tipo": "", "total": 0.0, "idas": 0, "detalhes": {}}
 
 if 'servico_selecionado' not in st.session_state:
-    st.session_state.servico_selecionado = "Diagnóstico (DCS/Clima/DCMA)"
+    st.session_state.servico_selecionado = list(SERVICOS.keys())[0]
 
 # --- 2. MENU LATERAL ---
 st.sidebar.title("🧭 Navegação Integrada")
@@ -71,33 +103,34 @@ if st.session_state.current_page == "🏠 Início":
 
 elif st.session_state.current_page == "💰 1. Precificação":
     st.title("💰 1. Motor de Precificação")
-    
+
     servico = st.selectbox(
-        "Selecione o Serviço para Precificar:", 
-        ["Diagnóstico (DCS/Clima/DCMA)", "Proposta Pontual (Palestras/Workshops)", "Mapeamento de Liderança (MPL)"],
-        index=["Diagnóstico (DCS/Clima/DCMA)", "Proposta Pontual (Palestras/Workshops)", "Mapeamento de Liderança (MPL)"].index(st.session_state.servico_selecionado)
+        "Selecione o Serviço para Precificar:",
+        list(SERVICOS.keys()),
+        index=list(SERVICOS.keys()).index(servico_atual())
     )
     st.session_state.servico_selecionado = servico
     st.markdown("---")
-    
-    if servico == "Diagnóstico (DCS/Clima/DCMA)":
-        dcs.render_precificacao()
-    elif servico == "Proposta Pontual (Palestras/Workshops)":
-        pontual.render_precificacao()
+
+    info = SERVICOS[servico]
+    if info["disponivel"]:
+        info["modulo"].render_precificacao()
     else:
-        st.info("Módulo em desenvolvimento.")
+        st.info("🚧 Módulo em desenvolvimento. Em breve disponível por aqui.")
 
 elif st.session_state.current_page == "📝 2. Proposta Técnica":
-    if st.session_state.servico_selecionado == "Proposta Pontual (Palestras/Workshops)":
-        pontual.render_tecnica()
+    mod = modulo_atual()
+    if mod:
+        mod.render_tecnica()
     else:
-        dcs.render_tecnica()
+        st.info("🚧 Este serviço ainda não tem Proposta Técnica implementada.")
 
 elif st.session_state.current_page == "📈 3. Proposta Comercial":
-    if st.session_state.servico_selecionado == "Proposta Pontual (Palestras/Workshops)":
-        pontual.render_comercial()
+    mod = modulo_atual()
+    if mod:
+        mod.render_comercial()
     else:
-        dcs.render_comercial()
+        st.info("🚧 Este serviço ainda não tem Proposta Comercial implementada.")
 
 elif st.session_state.current_page == "🤝 4. Handover (Operações)":
     handover.render_handover()
