@@ -4,7 +4,7 @@ import math
 import datetime
 from ferramentas.utilidades import (
     formatar_moeda, valor_por_extenso, calcular_amostra, calcular_amortizacao,
-    ir_para, adicionar_unidade, remover_unidade, adicionar_fase, remover_fase
+    ir_para, adicionar_unidade, remover_unidade, adicionar_fase, remover_fase, esc_md
 )
 from ferramentas.pptx_engine import processar_apresentacao
 from ferramentas.logistica import render_logistica
@@ -100,7 +100,7 @@ def render_precificacao():
     st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
 
     valor_parcial_fases = total_horas_fases * taxa_hora
-    st.success(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**.")
+    st.success(esc_md(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**."))
 
     st.markdown("---")
     st.markdown("### 💰 4. Precificação Final e Logística")
@@ -272,8 +272,8 @@ def render_comercial():
         v_op1 = st.session_state.valores_finais["op1"]
         v_op2 = st.session_state.valores_finais["op2"]
 
-        st.markdown(f"**Total Investimento Técnico (OP1):** {formatar_moeda(v_op1)}")
-        st.markdown(f"**Total Turnkey com Logística (OP2):** {formatar_moeda(v_op2)}")
+        st.markdown(esc_md(f"**Total Investimento Técnico (OP1):** {formatar_moeda(v_op1)}"))
+        st.markdown(esc_md(f"**Total Turnkey com Logística (OP2):** {formatar_moeda(v_op2)}"))
 
         st.write("---")
         qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
