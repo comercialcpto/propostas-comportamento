@@ -1,0 +1,17 @@
+# Tema base do Sistema Comportamento.
+# Cores e fontes globais. O ajuste fino visual (nav, cartões, botões) está
+# em ferramentas/estilo.py. Mexa nas cores aqui; no resto, lá.
+
+[theme]
+base = "light"
+primaryColor = "#009974"
+backgroundColor = "#F4F6F8"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F1B2D"
+borderColor = "#E3E8EE"
+baseFontSize = 15
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Space Grotesk':https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
