@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from ferramentas.utilidades import formatar_moeda, ir_para
+from ferramentas.logistica import render_logistica
+from ferramentas import config
 
 # MATRIZ DE PREÇOS OFICIAL
 CATALOGO_PONTUAL = {
@@ -37,18 +39,18 @@ CATALOGO_PONTUAL = {
     }
 }
 
+
 def render_precificacao():
-    
     # --- 1. POPULAÇÃO E UNIDADES ---
     st.markdown("### 👥 1. Cadastro de População e Unidades")
     st.info("Identifique os públicos para direcionar as palestras/workshops. Não há cálculo amostral neste módulo.")
-    
+
     for i, und in enumerate(st.session_state.unidades_pontual):
         c1, c2, c3, c4 = st.columns([0.4, 0.2, 0.2, 0.2])
-        und['nome'] = c1.text_input(f"Nome do Público/Área", value=und['nome'], key=f"p_nome_{und['id']}")
+        und['nome'] = c1.text_input("Nome do Público/Área", value=und['nome'], key=f"p_nome_{und['id']}")
         und['pop_total'] = c2.number_input("População Total", min_value=0, value=und['pop_total'], key=f"p_pop_{und['id']}")
         und['lideres'] = c3.number_input("Destes, Líderes", min_value=0, value=und['lideres'], key=f"p_lid_{und['id']}")
-        
+
         if len(st.session_state.unidades_pontual) > 1:
             if c4.button("🗑️ Remover", key=f"p_rem_{und['id']}"):
                 st.session_state.unidades_pontual = [u for u in st.session_state.unidades_pontual if u['id'] != und['id']]
@@ -57,9 +59,9 @@ def render_precificacao():
     def add_und_pontual():
         novo_id = len(st.session_state.unidades_pontual)
         st.session_state.unidades_pontual.append({"id": novo_id, "nome": f"Novo Público {novo_id+1}", "pop_total": 0, "lideres": 0})
-        
+
     st.button("➕ Adicionar Público / Área", on_click=add_und_pontual)
-    
+
     st.markdown("---")
 
     # --- 2. SELEÇÃO DA MATRIZ (O PREÇO VEM DAQUI) ---
@@ -75,7 +77,7 @@ def render_precificacao():
 
     valor_unitario = CATALOGO_PONTUAL[item_sel][categoria_sel][formato_sel]
     valor_total_item = valor_unitario * qtd_sel
-    
+
     col_add, col_vlr = st.columns([0.2, 0.8])
     if col_add.button("➕ Adicionar ao Escopo", type="primary"):
         st.session_state.carrinho_pontual.append({
@@ -87,7 +89,7 @@ def render_precificacao():
             "Subtotal": valor_total_item
         })
         st.rerun()
-    
+
     col_vlr.markdown(f"**Valor do item selecionado:** {qtd_sel}x de {formatar_moeda(valor_unitario)} = **{formatar_moeda(valor_total_item)}**")
 
     # Exibe o Carrinho
@@ -117,7 +119,7 @@ def render_precificacao():
         fase['nome'] = f1.text_input("Nome da Etapa", value=fase['nome'], key=f"fpnome_{fase['id']}")
         fase['horas'] = f2.number_input("Carga Horária (h)", min_value=0, value=fase['horas'], key=f"fphoras_{fase['id']}")
         total_horas_fases += fase['horas']
-        
+
         if f3.button("🗑️ Remover", key=f"fprem_{fase['id']}"):
             st.session_state.fases_pontual = [f for f in st.session_state.fases_pontual if f['id'] != fase['id']]
             st.rerun()
@@ -131,115 +133,24 @@ def render_precificacao():
 
     st.markdown("---")
 
-    # --- 4. LOGÍSTICA ---
+    # --- 4. LOGÍSTICA (compartilhada) ---
     st.markdown("### ✈️ 4. Planejamento de Logística")
-    
-    tipo_logistica = st.selectbox("Formato de cálculo de deslocamento:", [
-        "1. Sem Logística (100% Online ou Cliente assume)", 
-        "2. Logística Estimada (Percentual %)",
-        "3. Logística Base (Alimentação + Táxi da Base)",
-        "4. Logística Completa (Cotações Detalhadas)"
-    ])
-    
-    logistica_total = 0.0
-    qtd_idas = 0
-    detalhes_log = {}
-    
-    if tipo_logistica == "1. Sem Logística (100% Online ou Cliente assume)":
-        logistica_total = 0.0
-
-    elif tipo_logistica == "2. Logística Estimada (Percentual %)":
-        perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=15)
-        logistica_total = valor_op1 * (perc_logistica / 100)
-        detalhes_log = {"Percentual Aplicado": f"{perc_logistica}% sobre OP1"}
-        st.info(f"Cálculo: {perc_logistica}% sobre o Serviço ({formatar_moeda(valor_op1)}) = {formatar_moeda(logistica_total)}")
-
-    elif tipo_logistica == "3. Logística Base (Alimentação + Táxi da Base)":
-        c_ida, c_dia = st.columns(2)
-        qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-        dias_ida = c_dia.number_input("Dias por Ida (Palestras geralmente 1 ou 2)", min_value=1, value=1)
-        custo_taxi = qtd_idas * (150 * 2)
-        custo_alimentacao = qtd_idas * dias_ida * 120
-        logistica_total = custo_taxi + custo_alimentacao
-        detalhes_log = {"Táxi (Ida e Volta)": custo_taxi, "Alimentação": custo_alimentacao}
-        st.success(f"Táxi: R$ {custo_taxi:,.2f} + Alimentação: R$ {custo_alimentacao:,.2f} = **R$ {logistica_total:,.2f}**")
-
-    elif tipo_logistica == "4. Logística Completa (Cotações Detalhadas)":
-        c_ida, c_dia = st.columns(2)
-        qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-        dias_ida = c_dia.number_input("Dias por Ida", min_value=1, value=1)
-        
-        st.markdown("##### 🏨 Hospedagem")
-        ch1, ch2 = st.columns(2)
-        hotel_barato = ch1.number_input("Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
-        hotel_caro = ch2.number_input("Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
-        custo_hotel = ((hotel_barato + hotel_caro) / 2) * dias_ida * qtd_idas
-        
-        st.markdown("##### ✈️ Passagens Aéreas (+ 10% Taxa)")
-        st.caption("Fórmula Média: ((Mais Barata + Mais Cara) * 3.2) / 6")
-        ca1, ca2 = st.columns(2)
-        ida_barata = ca1.number_input("Ida: Mais Barata (R$)", min_value=0.0, step=50.0, key="ida_b_pont")
-        ida_cara = ca2.number_input("Ida: Mais Cara (R$)", min_value=0.0, step=50.0, key="ida_c_pont")
-        
-        ca3, ca4 = st.columns(2)
-        volta_barata = ca3.number_input("Volta: Mais Barata (R$)", min_value=0.0, step=50.0, key="volta_b_pont")
-        volta_cara = ca4.number_input("Volta: Mais Cara (R$)", min_value=0.0, step=50.0, key="volta_c_pont")
-        
-        media_ida = ((ida_barata + ida_cara) * 3.2) / 6
-        media_volta = ((volta_barata + volta_cara) * 3.2) / 6
-        custo_aereo_total = (media_ida + media_volta) * 1.10 * qtd_idas
-
-        st.markdown("##### 🚗 Carro: No Cliente (Hotel ⇄ Cliente) (+ 10% Taxa)")
-        cv1, cv2 = st.columns(2)
-        diaria_carro = cv1.number_input("Valor da Diária (R$)", min_value=0.0, step=10.0, key="diaria_c_pont")
-        dist_hotel_cliente = cv2.number_input("Dist. Hotel ⇄ Cliente (Km Total Dia)", min_value=0.0, step=5.0, key="dist_h_pont")
-        
-        custo_diarias = diaria_carro * dias_ida
-        custo_comb_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida
-        custo_carro_cliente = (custo_diarias + custo_comb_hotel) * 1.10 * qtd_idas
-        
-        st.markdown("##### 🛣️ Carro: Até o Cliente (Aeroporto ⇄ Destino) (+ 10% Taxa)")
-        cae1, cae2 = st.columns(2)
-        dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Destino (Km Total Ida e Volta)", min_value=0.0, step=10.0, key="dist_a_pont")
-        pedagio_aero = cae2.number_input("Pedágios (R$ Totais)", min_value=0.0, step=5.0, key="ped_a_pont")
-        
-        custo_comb_aero = (dist_aero_cliente / 9.0) * 6.0
-        custo_carro_aero = (pedagio_aero + custo_comb_aero) * 1.10 * qtd_idas
-        
-        logistica_total = custo_hotel + custo_aereo_total + custo_carro_cliente + custo_carro_aero
-        
-        detalhes_log = {
-            "Hospedagem": custo_hotel, 
-            "Passagens Aéreas (c/ taxa)": custo_aereo_total,
-            "Carro no Cliente (c/ taxa)": custo_carro_cliente,
-            "Carro até Cliente (c/ taxa)": custo_carro_aero
-        }
-        
-        st.info(f"**Resumo da Cotação Detalhada:** \n"
-                f"- Hospedagem: {formatar_moeda(custo_hotel)} \n"
-                f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)} \n"
-                f"- Carro no Cliente (com taxa): {formatar_moeda(custo_carro_cliente)} \n"
-                f"- Deslocamento Aeroporto (com taxa): {formatar_moeda(custo_carro_aero)} \n"
-                f"**Total Logística: {formatar_moeda(logistica_total)}**")
-
+    st.session_state.logistica_dados = render_logistica(
+        valor_op1, key_prefix="pontual",
+        percentual_padrao=config.PERCENTUAL_LOG_PONTUAL, dias_padrao=config.DIAS_IDA_PONTUAL
+    )
+    logistica_total = st.session_state.logistica_dados["total"]
     valor_op2 = valor_op1 + logistica_total
-    
-    # SALVAMENTO NA MEMÓRIA GLOBAAL
+
+    # Salvamento na memória global
     st.session_state.valores_finais["op1"] = valor_op1
     st.session_state.valores_finais["op2"] = valor_op2
     st.session_state.valores_finais["horas_totais"] = total_horas_fases
     st.session_state.valores_finais["taxa_hora"] = (valor_op1 / total_horas_fases) if total_horas_fases > 0 else 0.0
-    
-    st.session_state.logistica_dados = {
-        "tipo": tipo_logistica,
-        "total": logistica_total,
-        "idas": qtd_idas,
-        "detalhes": detalhes_log
-    }
 
     st.markdown("---")
     st.markdown("### 💰 5. Resumo da Precificação")
-    
+
     c_tot1, c_tot2 = st.columns(2)
     c_tot1.metric("Total OP1 (Baseado na Matriz)", formatar_moeda(valor_op1))
     c_tot2.metric("Total OP2 (Turnkey com Logística)", formatar_moeda(valor_op2))
@@ -247,10 +158,12 @@ def render_precificacao():
     st.write("")
     st.button("Salvar e Avançar para Técnica ➡️", on_click=ir_para, args=("📝 2. Proposta Técnica",), type="primary")
 
+
 def render_tecnica():
     st.title("📝 2. Proposta Técnica (Pontual)")
-    st.info("A geração de PPTX para propostas pontuais será implementada na próxima etapa, usando o mesmo modelo do DCS.")
+    st.info("A geração de PPTX para propostas pontuais será implementada na próxima etapa, usando o mesmo motor do DCS.")
     st.button("Avançar para Proposta Comercial ➡️", on_click=ir_para, args=("📈 3. Proposta Comercial",))
+
 
 def render_comercial():
     st.title("📈 3. Proposta Comercial (Pontual)")
