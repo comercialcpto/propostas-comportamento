@@ -1,16 +1,11 @@
 """
 Calculadora de logística COMPARTILHADA por todos os módulos.
 
-Antes, este bloco de ~80 linhas estava duplicado em dcs.py e pontual.py.
-Agora é um só. Cada módulo chama render_logistica() passando seus padrões
-(percentual e dias por ida) e um key_prefix único para evitar colisão de
-chaves do Streamlit.
-
 Retorno: dict no formato de st.session_state.logistica_dados
          {"tipo", "total", "idas", "detalhes"}
 """
 import streamlit as st
-from ferramentas.utilidades import formatar_moeda
+from ferramentas.utilidades import formatar_moeda, esc_md
 from ferramentas import config
 
 OPCOES_LOGISTICA = [
@@ -42,7 +37,7 @@ def render_logistica(valor_op1, key_prefix, percentual_padrao=30, dias_padrao=5)
         )
         total = valor_op1 * (perc / 100)
         detalhes = {"Percentual Aplicado": f"{perc}% sobre OP1"}
-        st.info(f"Cálculo: {perc}% sobre o Serviço ({formatar_moeda(valor_op1)}) = {formatar_moeda(total)}")
+        st.info(esc_md(f"Cálculo: {perc}% sobre o Serviço ({formatar_moeda(valor_op1)}) = {formatar_moeda(total)}"))
 
     elif tipo == OPCOES_LOGISTICA[2]:  # Base
         c_ida, c_dia = st.columns(2)
@@ -54,11 +49,11 @@ def render_logistica(valor_op1, key_prefix, percentual_padrao=30, dias_padrao=5)
         custo_alimentacao = idas * dias_ida * config.CUSTO_ALIMENTACAO_DIA
         total = custo_taxi + custo_alimentacao
         detalhes = {"Táxi (Ida e Volta)": custo_taxi, "Alimentação": custo_alimentacao}
-        st.success(
+        st.success(esc_md(
             f"**Cálculo Base:** {idas} ida(s) — Táxi: {formatar_moeda(custo_taxi)} + "
             f"{idas * dias_ida} diária(s) de alimentação: {formatar_moeda(custo_alimentacao)} "
             f"= **{formatar_moeda(total)}**"
-        )
+        ))
 
     elif tipo == OPCOES_LOGISTICA[3]:  # Completa
         total, idas, detalhes = _logistica_completa(key_prefix, dias_padrao)
@@ -124,12 +119,12 @@ def _logistica_completa(key_prefix, dias_padrao):
         "Carro no Cliente (c/ taxa)": custo_carro_cliente,
         "Carro até Cliente (c/ taxa)": custo_carro_aero,
     }
-    st.info(
+    st.info(esc_md(
         f"**Resumo da Cotação Detalhada:**\n"
         f"- Hospedagem: {formatar_moeda(custo_hotel)}\n"
         f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)}\n"
         f"- Carro no Cliente (com taxa): {formatar_moeda(custo_carro_cliente)}\n"
         f"- Deslocamento Aeroporto (com taxa): {formatar_moeda(custo_carro_aero)}\n"
         f"**Total Logística: {formatar_moeda(total)}**"
-    )
+    ))
     return total, idas, detalhes
