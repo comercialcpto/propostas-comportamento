@@ -2,8 +2,7 @@
 Camada de identidade visual do Sistema Comportamento — modo ESCURO.
 
 TODA a customização visual fica centralizada aqui (e nas cores do
-.streamlit/config.toml). Se um dia o Streamlit mudar algum nome de classe
-interna e algo "descolar", o conserto é só neste arquivo.
+.streamlit/config.toml).
 
 Paleta:
   navy exato do PPT (fundo do slide #0C2539)  = estrutura
@@ -40,6 +39,21 @@ _CSS = """
 [data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer{ display:none !important; }
 header[data-testid="stHeader"]{ background:transparent; }
 [data-testid="stMainBlockContainer"]{ max-width:1240px; padding-top:2.2rem; padding-bottom:4rem; }
+
+/* ---- FIX: controle de recolher/expandir a sidebar SEMPRE visível e clicável ----
+   (cobre os nomes atuais e legados de testid entre versões do Streamlit) */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"]{
+  display:flex !important; visibility:visible !important; opacity:1 !important;
+  z-index:1000000 !important; pointer-events:auto !important;
+}
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] button,
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] button{
+  display:inline-flex !important; visibility:visible !important; opacity:1 !important;
+  pointer-events:auto !important; color:var(--ink) !important;
+}
 
 /* ---- Tipografia ---- */
 h1,h2,h3{ color:var(--ink); letter-spacing:-.012em; }
