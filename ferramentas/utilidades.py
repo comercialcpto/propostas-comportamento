@@ -4,7 +4,18 @@ from ferramentas import config
 
 
 def formatar_moeda(valor):
+    """Valor literal com cifrão. Use em st.metric, st.table e nos PPTX."""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def esc_md(texto):
+    """
+    Escapa o cifrão para uso em CONTEXTOS MARKDOWN (st.write/markdown/success/
+    info/warning/caption). Sem isso, o Streamlit interpreta '$...$' como LaTeX
+    e o cifrão some (e os valores entre eles saem em fonte de fórmula, menores).
+    NÃO use em st.metric, st.table nem nos PPTX — lá o cifrão deve ser literal.
+    """
+    return texto.replace("$", r"\$")
 
 
 # --- Conversão de valor por extenso ---
@@ -54,14 +65,12 @@ def _converter_inteiro(inteiro):
     if milhoes > 0:
         grupos.append(_converter_trio(milhoes) + (" milhões" if milhoes > 1 else " milhão"))
     if milhares > 0:
-        # "mil" e não "um mil"
         grupos.append("mil" if milhares == 1 else _converter_trio(milhares) + " mil")
     if resto > 0:
         grupos.append(_converter_trio(resto))
 
     if len(grupos) == 1:
         return grupos[0]
-    # Regra do "e": antes do último grupo quando ele é < 100 ou múltiplo exato de 100
     if resto > 0 and (resto < 100 or resto % 100 == 0):
         return ", ".join(grupos[:-1]) + " e " + grupos[-1]
     return ", ".join(grupos)
@@ -73,7 +82,6 @@ def valor_por_extenso(valor):
     inteiro = int(valor)
     centavos = int(round((valor - inteiro) * 100))
 
-    # Caso especial: menos de 1 real (só centavos)
     if inteiro == 0 and centavos > 0:
         texto_cent = _converter_inteiro(centavos)
         unidade = "centavo" if centavos == 1 else "centavos"
