@@ -7,264 +7,189 @@ from ferramentas.utilidades import (
     ir_para, adicionar_unidade, remover_unidade, adicionar_fase, remover_fase
 )
 from ferramentas.pptx_engine import processar_apresentacao
+from ferramentas.logistica import render_logistica
+from ferramentas import config
+
 
 def render_precificacao():
-    # st.title("💰 1. Motor de Precificação") - Gerenciado no Router
-    servico_prec = st.session_state.servico_selecionado
-    
-    if servico_prec == "Diagnóstico (DCS/Clima/DCMA)":
-        st.markdown("### 📊 1. Cadastro de População e Unidades")
-        
-        for i, und in enumerate(st.session_state.unidades_dcs):
-            c1, c2, c3, c4 = st.columns([0.4, 0.2, 0.2, 0.2])
-            und['nome'] = c1.text_input(f"Nome da Unidade/Área", value=und['nome'], key=f"nome_{und['id']}")
-            und['pop_total'] = c2.number_input("População Total", min_value=0, value=und['pop_total'], key=f"pop_{und['id']}")
-            und['lideres'] = c3.number_input("Total de Líderes", min_value=0, value=und['lideres'], key=f"lid_{und['id']}")
-            
-            if len(st.session_state.unidades_dcs) > 1:
-                if c4.button("🗑️ Remover", key=f"rem_{und['id']}"):
-                    remover_unidade(und['id'])
-                    st.rerun()
+    # O router já garante que só chegamos aqui no serviço de Diagnóstico.
+    st.markdown("### 📊 1. Cadastro de População e Unidades")
 
-        st.button("➕ Adicionar Unidade / Área", on_click=adicionar_unidade)
-        
-        st.markdown("---")
-        st.markdown("### ⚙️ 2. Motor Estatístico (Coleta de Dados em Campo)")
-        
-        total_horas_campo = 0
-        total_amostra = 0
-        dados_tabela_prova = []
-        
-        for und in st.session_state.unidades_dcs:
-            if und['pop_total'] > 0:
-                amostra_total = calcular_amostra(und['pop_total'], margem_erro=0.08, proporcao=0.5)
-                amostra_lideres = calcular_amostra(und['lideres'], margem_erro=0.05, proporcao=0.8)
-                amostra_operacional = max(0, amostra_total - amostra_lideres)
-                
-                turmas_hm = math.floor(amostra_lideres / 12)
-                entrevistas = amostra_lideres % 12
-                turmas_foco = math.ceil(amostra_operacional / 12)
-                
-                horas_hm = turmas_hm * 2
-                horas_foco = turmas_foco * 2
-                horas_entrevistas = entrevistas * 1.5
-                
-                total_horas_unidade = horas_hm + horas_foco + horas_entrevistas
-                total_horas_campo += total_horas_unidade
-                total_amostra += amostra_total
-                
-                dados_tabela_prova.append({
-                    "Unidade / Área": und['nome'],
-                    "Pop. Total": und['pop_total'],
-                    "Amostra Base (Het. 8%)": amostra_total,
-                    "Pop. Líderes": und['lideres'],
-                    "Amostra Líderes (Hom. 5%)": amostra_lideres,
-                    "Total Horas Campo": f"{total_horas_unidade} h"
-                })
-                
-                with st.expander(f"📌 Racional de Cálculo: {und['nome']}", expanded=False):
-                    st.write(f"**1. Liderança:** Dos {und['lideres']} líderes, a amostra exigida é de **{amostra_lideres} pessoas**.")
-                    st.write(f"↳ Formaremos **{turmas_hm} turmas de Hearts & Minds** de 12 pessoas (*{turmas_hm} turmas x 2h = {horas_hm}h*).")
-                    st.write(f"↳ O saldo de **{entrevistas} líderes** farão **Entrevistas Individuais** (*{entrevistas} pessoas x 1,5h = {horas_entrevistas}h*).")
-                    
-                    st.write(f"**2. Base Operacional:** População de {und['pop_total'] - und['lideres']} pessoas, resultando na amostra restante de **{amostra_operacional} pessoas**.")
-                    st.write(f"↳ Formaremos **{turmas_foco} Grupos Focais** de até 12 pessoas (*{turmas_foco} turmas x 2h = {horas_foco}h*).")
-                    
-                    st.success(f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas}h (Entrevistas) + {horas_foco}h (Grupos Focais) = **{total_horas_unidade} horas**.")
+    for i, und in enumerate(st.session_state.unidades_dcs):
+        c1, c2, c3, c4 = st.columns([0.4, 0.2, 0.2, 0.2])
+        und['nome'] = c1.text_input("Nome da Unidade/Área", value=und['nome'], key=f"nome_{und['id']}")
+        und['pop_total'] = c2.number_input("População Total", min_value=0, value=und['pop_total'], key=f"pop_{und['id']}")
+        und['lideres'] = c3.number_input("Total de Líderes", min_value=0, value=und['lideres'], key=f"lid_{und['id']}")
 
-        if dados_tabela_prova:
-            st.markdown("#### 📝 Tabela de Prova Real (Resumo de Amostragem)")
-            st.table(pd.DataFrame(dados_tabela_prova))
-
-        st.markdown("---")
-        st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais)")
-        st.info("Personalize as etapas fixas e operacionais do projeto. As horas cadastradas aqui serão somadas à coleta de campo.")
-        
-        taxa_hora = st.number_input("Valor da Hora Técnica (R$)", min_value=0.0, value=480.0, step=10.0, key="taxa_hora_topo")
-
-        total_horas_fases = 0
-        for fase in st.session_state.fases_dcs:
-            f1, f2, f3 = st.columns([0.6, 0.2, 0.2])
-            fase['nome'] = f1.text_input("Nome da Etapa", value=fase['nome'], key=f"fnome_{fase['id']}")
-            fase['horas'] = f2.number_input("Carga Horária (h)", min_value=0, value=fase['horas'], key=f"fhoras_{fase['id']}")
-            total_horas_fases += fase['horas']
-            if f3.button("🗑️ Remover", key=f"frem_{fase['id']}"):
-                remover_fase(fase['id'])
+        if len(st.session_state.unidades_dcs) > 1:
+            if c4.button("🗑️ Remover", key=f"rem_{und['id']}"):
+                remover_unidade(und['id'])
                 st.rerun()
 
-        st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
+    st.button("➕ Adicionar Unidade / Área", on_click=adicionar_unidade)
 
-        valor_parcial_fases = total_horas_fases * taxa_hora
-        st.success(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**.")
+    st.markdown("---")
+    st.markdown("### ⚙️ 2. Motor Estatístico (Coleta de Dados em Campo)")
 
-        st.markdown("---")
-        st.markdown("### 💰 4. Precificação Final e Logística")
-        
-        horas_totais = total_horas_campo + total_horas_fases
-        valor_op1 = horas_totais * taxa_hora
-        
-        st.write("#### Planejamento de Logística (Opção 2)")
-        tipo_logistica = st.selectbox("Formato de cálculo de deslocamento:", [
-            "1. Sem Logística (100% pelo Cliente)", 
-            "2. Logística Base (Alimentação + Táxi da Base)", 
-            "3. Logística Completa (Cotações Detalhadas)", 
-            "4. Logística Estimada (Percentual %)"
-        ])
-        
-        logistica_total = 0.0
-        qtd_idas = 0
-        detalhes_log = {}
-        
-        if tipo_logistica == "1. Sem Logística (100% pelo Cliente)":
-            st.info("A Opção 2 terá o mesmo valor da Opção 1, pois o cliente arcará com todos os custos de viagem diretamente.")
-            logistica_total = 0.0
+    total_horas_campo = 0
+    total_amostra = 0
+    dados_tabela_prova = []
 
-        elif tipo_logistica == "2. Logística Base (Alimentação + Táxi da Base)":
-            c_ida, c_dia = st.columns(2)
-            qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-            dias_ida = c_dia.number_input("Dias por Ida (padrão 5 = semana cheia)", min_value=1, value=5)
-            
-            custo_taxi = qtd_idas * (150 * 2)
-            custo_alimentacao = qtd_idas * dias_ida * 120
-            logistica_total = custo_taxi + custo_alimentacao
-            detalhes_log = {"Táxi (Ida e Volta)": custo_taxi, "Alimentação": custo_alimentacao}
-            
-            st.success(f"**Cálculo Base:** {qtd_idas} idas (Táxi: R$ {custo_taxi:,.2f}) + {qtd_idas * dias_ida} dias de alimentação (R$ {custo_alimentacao:,.2f}) = **R$ {logistica_total:,.2f}**")
+    for und in st.session_state.unidades_dcs:
+        if und['pop_total'] > 0:
+            amostra_total = calcular_amostra(und['pop_total'],
+                                             margem_erro=config.MARGEM_ERRO_GERAL,
+                                             proporcao=config.PROPORCAO_GERAL)
+            amostra_lideres = calcular_amostra(und['lideres'],
+                                               margem_erro=config.MARGEM_ERRO_LIDERES,
+                                               proporcao=config.PROPORCAO_LIDERES)
+            amostra_operacional = max(0, amostra_total - amostra_lideres)
 
-        elif tipo_logistica == "3. Logística Completa (Cotações Detalhadas)":
-            c_ida, c_dia = st.columns(2)
-            qtd_idas = c_ida.number_input("Quantidade de Idas Presenciais", min_value=1, value=1)
-            dias_ida = c_dia.number_input("Dias por Ida", min_value=1, value=5)
-            
-            st.markdown("##### 🏨 Hospedagem")
-            ch1, ch2 = st.columns(2)
-            hotel_barato = ch1.number_input("Hotel Mais Barato (R$)", min_value=0.0, step=10.0)
-            hotel_caro = ch2.number_input("Hotel Mais Caro (R$)", min_value=0.0, step=10.0)
-            custo_hotel = ((hotel_barato + hotel_caro) / 2) * dias_ida * qtd_idas
-            
-            st.markdown("##### ✈️ Passagens Aéreas (+ 10% Taxa)")
-            st.caption("Fórmula Média: ((Mais Barata + Mais Cara) * 3.2) / 6")
-            ca1, ca2 = st.columns(2)
-            ida_barata = ca1.number_input("Ida: Mais Barata (R$)", min_value=0.0, step=50.0, key="ida_b_dcs")
-            ida_cara = ca2.number_input("Ida: Mais Cara (R$)", min_value=0.0, step=50.0, key="ida_c_dcs")
-            
-            ca3, ca4 = st.columns(2)
-            volta_barata = ca3.number_input("Volta: Mais Barata (R$)", min_value=0.0, step=50.0, key="volta_b_dcs")
-            volta_cara = ca4.number_input("Volta: Mais Cara (R$)", min_value=0.0, step=50.0, key="volta_c_dcs")
-            
-            media_ida = ((ida_barata + ida_cara) * 3.2) / 6
-            media_volta = ((volta_barata + volta_cara) * 3.2) / 6
-            custo_aereo_total = (media_ida + media_volta) * 1.10 * qtd_idas
+            turmas_hm = math.floor(amostra_lideres / config.TAMANHO_TURMA)
+            entrevistas = amostra_lideres % config.TAMANHO_TURMA
+            turmas_foco = math.ceil(amostra_operacional / config.TAMANHO_TURMA)
 
-            st.markdown("##### 🚗 Carro: No Cliente (Hotel ⇄ Cliente) (+ 10% Taxa)")
-            cv1, cv2 = st.columns(2)
-            diaria_carro = cv1.number_input("Valor da Diária do Carro (R$)", min_value=0.0, step=10.0, key="diaria_c_dcs")
-            dist_hotel_cliente = cv2.number_input("Dist. Hotel ⇄ Cliente (Km Total Dia)", min_value=0.0, step=5.0, key="dist_h_dcs")
-            
-            custo_diarias = diaria_carro * dias_ida
-            custo_comb_hotel = (dist_hotel_cliente / 9.0) * 6.0 * dias_ida
-            custo_carro_cliente = (custo_diarias + custo_comb_hotel) * 1.10 * qtd_idas
-            
-            st.markdown("##### 🛣️ Carro: Até o Cliente (Aeroporto ⇄ Destino) (+ 10% Taxa)")
-            cae1, cae2 = st.columns(2)
-            dist_aero_cliente = cae1.number_input("Dist. Aeroporto ⇄ Destino (Km Total Ida e Volta)", min_value=0.0, step=10.0, key="dist_a_dcs")
-            pedagio_aero = cae2.number_input("Pedágios (R$ Totais)", min_value=0.0, step=5.0, key="ped_a_dcs")
-            
-            custo_comb_aero = (dist_aero_cliente / 9.0) * 6.0
-            custo_carro_aero = (pedagio_aero + custo_comb_aero) * 1.10 * qtd_idas
-            
-            logistica_total = custo_hotel + custo_aereo_total + custo_carro_cliente + custo_carro_aero
-            
-            detalhes_log = {
-                "Hospedagem": custo_hotel, 
-                "Passagens Aéreas (c/ taxa)": custo_aereo_total,
-                "Carro no Cliente (c/ taxa)": custo_carro_cliente,
-                "Carro até Cliente (c/ taxa)": custo_carro_aero
-            }
-            
-            st.info(f"**Resumo da Cotação Detalhada:** \n"
-                    f"- Hospedagem: {formatar_moeda(custo_hotel)} \n"
-                    f"- Aéreo (com taxa): {formatar_moeda(custo_aereo_total)} \n"
-                    f"- Carro no Cliente (com taxa): {formatar_moeda(custo_carro_cliente)} \n"
-                    f"- Deslocamento Aeroporto (com taxa): {formatar_moeda(custo_carro_aero)} \n"
-                    f"**Total Logística: {formatar_moeda(logistica_total)}**")
+            horas_hm = turmas_hm * config.HORAS_POR_TURMA
+            horas_foco = turmas_foco * config.HORAS_POR_TURMA
+            horas_entrevistas = entrevistas * config.HORAS_POR_ENTREVISTA
 
-        elif tipo_logistica == "4. Logística Estimada (Percentual %)":
-            perc_logistica = st.number_input("Margem Estimada de Logística (%)", min_value=0, max_value=100, value=30)
-            logistica_total = valor_op1 * (perc_logistica / 100)
-            detalhes_log = {"Percentual Aplicado": f"{perc_logistica}% sobre OP1"}
-            st.info(f"Cálculo: {perc_logistica}% sobre o Serviço Técnico ({formatar_moeda(valor_op1)}) = {formatar_moeda(logistica_total)}")
-        
-        valor_op2 = valor_op1 + logistica_total
-        
-        # SALVAMENTO NA MEMÓRIA GLOBAAL
-        st.session_state.valores_finais["op1"] = valor_op1
-        st.session_state.valores_finais["op2"] = valor_op2
-        st.session_state.valores_finais["horas_totais"] = horas_totais
-        st.session_state.valores_finais["taxa_hora"] = taxa_hora
-        
-        st.session_state.logistica_dados = {
-            "tipo": tipo_logistica,
-            "total": logistica_total,
-            "idas": qtd_idas,
-            "detalhes": detalhes_log
-        }
-        
-        st.write(f"**Racional da Precificação Técnica:** {total_horas_campo}h (Campo) + {total_horas_fases}h (Plano Detalhado) = **{horas_totais} horas totais de projeto**.")
-        
-        c_tot1, c_tot2 = st.columns(2)
-        c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
-        c_tot2.metric("Total OP2 (Com Logística)", formatar_moeda(valor_op2))
+            total_horas_unidade = horas_hm + horas_foco + horas_entrevistas
+            total_horas_campo += total_horas_unidade
+            total_amostra += amostra_total
 
-        st.write("")
-        st.button("Salvar e Avançar para Proposta Técnica ➡️", on_click=ir_para, args=("📝 2. Proposta Técnica",), type="primary")
+            dados_tabela_prova.append({
+                "Unidade / Área": und['nome'],
+                "Pop. Total": und['pop_total'],
+                "Amostra Base (Het. 8%)": amostra_total,
+                "Pop. Líderes": und['lideres'],
+                "Amostra Líderes (Hom. 5%)": amostra_lideres,
+                "Total Horas Campo": f"{total_horas_unidade} h"
+            })
+
+            with st.expander(f"📌 Racional de Cálculo: {und['nome']}", expanded=False):
+                st.write(f"**1. Liderança:** Dos {und['lideres']} líderes, a amostra exigida é de **{amostra_lideres} pessoas**.")
+                st.write(f"↳ Formaremos **{turmas_hm} turmas de Hearts & Minds** de {config.TAMANHO_TURMA} pessoas (*{turmas_hm} turmas x {config.HORAS_POR_TURMA}h = {horas_hm}h*).")
+                st.write(f"↳ O saldo de **{entrevistas} líderes** farão **Entrevistas Individuais** (*{entrevistas} pessoas x {config.HORAS_POR_ENTREVISTA}h = {horas_entrevistas}h*).")
+
+                st.write(f"**2. Base Operacional:** População de {und['pop_total'] - und['lideres']} pessoas, resultando na amostra restante de **{amostra_operacional} pessoas**.")
+                st.write(f"↳ Formaremos **{turmas_foco} Grupos Focais** de até {config.TAMANHO_TURMA} pessoas (*{turmas_foco} turmas x {config.HORAS_POR_TURMA}h = {horas_foco}h*).")
+
+                st.success(f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas}h (Entrevistas) + {horas_foco}h (Grupos Focais) = **{total_horas_unidade} horas**.")
+
+    if dados_tabela_prova:
+        st.markdown("#### 📝 Tabela de Prova Real (Resumo de Amostragem)")
+        st.table(pd.DataFrame(dados_tabela_prova))
+
+    st.markdown("---")
+    st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais)")
+    st.info("Personalize as etapas fixas e operacionais do projeto. As horas cadastradas aqui serão somadas à coleta de campo.")
+
+    taxa_hora = st.number_input("Valor da Hora Técnica (R$)", min_value=0.0,
+                                value=config.TAXA_HORA_PADRAO, step=10.0, key="taxa_hora_topo")
+
+    total_horas_fases = 0
+    for fase in st.session_state.fases_dcs:
+        f1, f2, f3 = st.columns([0.6, 0.2, 0.2])
+        fase['nome'] = f1.text_input("Nome da Etapa", value=fase['nome'], key=f"fnome_{fase['id']}")
+        fase['horas'] = f2.number_input("Carga Horária (h)", min_value=0, value=fase['horas'], key=f"fhoras_{fase['id']}")
+        total_horas_fases += fase['horas']
+        if f3.button("🗑️ Remover", key=f"frem_{fase['id']}"):
+            remover_fase(fase['id'])
+            st.rerun()
+
+    st.button("➕ Adicionar Etapa no Plano", on_click=adicionar_fase)
+
+    valor_parcial_fases = total_horas_fases * taxa_hora
+    st.success(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**.")
+
+    st.markdown("---")
+    st.markdown("### 💰 4. Precificação Final e Logística")
+
+    horas_totais = total_horas_campo + total_horas_fases
+    valor_op1 = horas_totais * taxa_hora
+
+    st.write("#### Planejamento de Logística (Opção 2)")
+    st.session_state.logistica_dados = render_logistica(
+        valor_op1, key_prefix="dcs",
+        percentual_padrao=config.PERCENTUAL_LOG_DCS, dias_padrao=config.DIAS_IDA_DCS
+    )
+    logistica_total = st.session_state.logistica_dados["total"]
+    valor_op2 = valor_op1 + logistica_total
+
+    # Salvamento na memória global
+    st.session_state.valores_finais["op1"] = valor_op1
+    st.session_state.valores_finais["op2"] = valor_op2
+    st.session_state.valores_finais["horas_totais"] = horas_totais
+    st.session_state.valores_finais["taxa_hora"] = taxa_hora
+
+    st.write(f"**Racional da Precificação Técnica:** {total_horas_campo}h (Campo) + {total_horas_fases}h (Plano Detalhado) = **{horas_totais} horas totais de projeto**.")
+
+    c_tot1, c_tot2 = st.columns(2)
+    c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
+    c_tot2.metric("Total OP2 (Com Logística)", formatar_moeda(valor_op2))
+
+    st.write("")
+    st.button("Salvar e Avançar para Proposta Técnica ➡️", on_click=ir_para,
+              args=("📝 2. Proposta Técnica",), type="primary")
+
 
 def render_tecnica():
     st.title("📝 2. Gerador de Proposta Técnica")
     st.caption("As informações inseridas aqui alimentarão automaticamente a Proposta Comercial.")
-    
+
     with st.sidebar:
         st.markdown("---")
         template_upload = st.file_uploader("Suba o template (Técnica)", type="pptx")
-    
-    campos_vazios = []
 
     with st.expander("📍 1. Identificação Geral (Compartilhada)", expanded=True):
         c1, c2, c3 = st.columns(3)
-        
+
         srv = st.session_state.get('servico_selecionado', "Diagnóstico (DCS/Clima/DCMA)")
         st.session_state.memoria_geral["servico"] = c1.text_input("Serviço Principal", value=srv, disabled=True)
-        
+
         st.session_state.memoria_geral["cliente"] = c2.text_input("Nome da Empresa ({{CLIENTE}})*", value=st.session_state.memoria_geral.get("cliente", ""))
         st.session_state.memoria_geral["unidade"] = c3.text_input("Unidade ({{UNIDADE}})*", value=st.session_state.memoria_geral.get("unidade", ""))
-        
+
         c4, c5, c6 = st.columns(3)
         st.session_state.memoria_geral["num_prop"] = c4.text_input("Nº da Proposta ({{NUM_PROP}})*", value=st.session_state.memoria_geral.get("num_prop", ""))
         st.session_state.memoria_geral["escopo"] = c5.text_input("Título do Escopo ({{ESCOPO}})*", value=st.session_state.memoria_geral.get("escopo", ""))
         st.session_state.memoria_geral["prazo"] = c6.text_input("Prazo ({{PRAZO}})*", value=st.session_state.memoria_geral.get("prazo", ""))
-        
+
         c7, c8, c9 = st.columns([0.3, 0.4, 0.3])
         st.session_state.memoria_geral["formato"] = c7.selectbox("Formato ({{FORMATO}})*", ["Híbrido", "Presencial", "Online"], index=["Híbrido", "Presencial", "Online"].index(st.session_state.memoria_geral.get("formato", "Híbrido")))
-        
+
         idiomas_selecionados = c8.multiselect("Idioma ({{IDIOMA}})*", ["Português", "Espanhol", "Inglês"], default=["Português"])
-        if len(idiomas_selecionados) == 1: idioma_str = idiomas_selecionados[0]
-        elif len(idiomas_selecionados) == 2: idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
-        elif len(idiomas_selecionados) > 2: idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
-        else: idioma_str = ""
+        if len(idiomas_selecionados) == 1:
+            idioma_str = idiomas_selecionados[0]
+        elif len(idiomas_selecionados) == 2:
+            idioma_str = f"{idiomas_selecionados[0]} e {idiomas_selecionados[1]}"
+        elif len(idiomas_selecionados) > 2:
+            idioma_str = ", ".join(idiomas_selecionados[:-1]) + f" e {idiomas_selecionados[-1]}"
+        else:
+            idioma_str = ""
         st.session_state.memoria_geral["idioma"] = idioma_str
-        
-        st.session_state.memoria_geral["idas"] = c9.number_input("Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=st.session_state.memoria_geral.get("idas", 0))
-        
+
+        # idas: unificado com a logística. Pré-preenche com o que veio da Precificação,
+        # mas o consultor pode sobrescrever.
+        idas_sugerido = st.session_state.get("logistica_dados", {}).get("idas", 0)
+        idas_atual = st.session_state.memoria_geral.get("idas", 0)
+        valor_idas_inicial = idas_atual if idas_atual else idas_sugerido
+        st.session_state.memoria_geral["idas"] = c9.number_input(
+            "Nº de Idas Presenciais ({{IDAS}})", min_value=0, value=int(valor_idas_inicial)
+        )
+        if idas_sugerido and idas_sugerido != st.session_state.memoria_geral["idas"]:
+            c9.caption(f"Logística sugeriu {idas_sugerido} ida(s).")
+
         st.session_state.memoria_geral["justificativa"] = st.text_area("Justificativa ({{JUSTIFICATIVA}})*", value=st.session_state.memoria_geral.get("justificativa", ""))
         st.session_state.memoria_geral["objetivo"] = st.text_area("Objetivo ({{OBJETIVO}})*", value=st.session_state.memoria_geral.get("objetivo", ""))
 
     with st.expander("📅 2. Cronograma de Avanço Inteligente", expanded=True):
         st.info("As fases abaixo foram importadas automaticamente do Plano Detalhado da Precificação.")
         qtd_meses_projeto = st.number_input("Duração total do projeto (meses)", min_value=1, value=12)
-        
+
         atividades_lista = []
         fases_importadas = [{"nome": "Coleta de Dados em Campo"}] + st.session_state.fases_dcs
-        
+
         for i, fase in enumerate(fases_importadas):
             ca, cm = st.columns([0.4, 0.6])
             nome_at = ca.text_input(f"Nome da Fase {i+1}", value=fase['nome'], key=f"tg_{i}")
@@ -274,24 +199,24 @@ def render_tecnica():
 
     with st.expander("👥 3. Detalhamento Simplificado do Público", expanded=True):
         st.info("Os totais foram carregados da Precificação. Ajuste caso o projeto demande adicionar terceiros que não estavam no cálculo amostral.")
-        
+
         lideres_calc = sum(u['lideres'] for u in st.session_state.unidades_dcs)
         pop_calc = sum(u['pop_total'] for u in st.session_state.unidades_dcs)
-        
+
         cp1, cp2, cp3 = st.columns(3)
         n_lid_total = cp1.number_input("Total de Líderes (Equipe Própria)", min_value=0, value=int(lideres_calc))
         n_oper = cp2.number_input("Total Operacional (Equipe Própria)", min_value=0, value=int(max(0, pop_calc - lideres_calc)))
         n_terc = cp3.number_input("Terceiros Adicionais", min_value=0, value=0)
-        
+
         n_p_terc = n_lid_total + n_oper + n_terc
         st.metric("Público Alvo Consolidado no Relatório", n_p_terc)
 
     colA, colB = st.columns(2)
     colA.button("⬅️ Voltar para Precificação", on_click=ir_para, args=("💰 1. Precificação",))
-    
+
     def tentar_gerar_tecnica():
         st.session_state.tentou_gerar = True
-        
+
     colB.button("🚀 VALIDAR E GERAR TÉCNICA", on_click=tentar_gerar_tecnica, type="primary")
 
     if st.session_state.tentou_gerar:
@@ -299,26 +224,30 @@ def render_tecnica():
             st.error("⚠️ Faça o upload do template da Técnica na barra lateral.")
         else:
             mapa = {
-                "{{SERVICO}}": st.session_state.memoria_geral["servico"], 
-                "{{CLIENTE}}": st.session_state.memoria_geral["cliente"], 
-                "{{UNIDADE}}": st.session_state.memoria_geral["unidade"], 
-                "{{NUM_PROP}}": st.session_state.memoria_geral["num_prop"], 
+                "{{SERVICO}}": st.session_state.memoria_geral["servico"],
+                "{{CLIENTE}}": st.session_state.memoria_geral["cliente"],
+                "{{UNIDADE}}": st.session_state.memoria_geral["unidade"],
+                "{{NUM_PROP}}": st.session_state.memoria_geral["num_prop"],
                 "{{ESCOPO}}": st.session_state.memoria_geral["escopo"],
                 "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
-                "{{JUSTIFICATIVA}}": st.session_state.memoria_geral["justificativa"], 
+                "{{JUSTIFICATIVA}}": st.session_state.memoria_geral["justificativa"],
                 "{{OBJETIVO}}": st.session_state.memoria_geral["objetivo"],
-                "{{PUBLICO}}": str(n_p_terc), 
-                "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
-                "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
+                "{{PUBLICO}}": str(n_p_terc),
+                "{{PRAZO}}": st.session_state.memoria_geral["prazo"],
+                "{{FORMATO}}": st.session_state.memoria_geral["formato"],
                 "{{IDIOMA}}": st.session_state.memoria_geral["idioma"],
                 "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
-                "{{N_LID}}": str(n_lid_total), 
-                "{{N_OPER}}": str(n_oper), 
+                "{{N_LID}}": str(n_lid_total),
+                "{{N_OPER}}": str(n_oper),
                 "{{N_PTERC}}": str(n_p_terc)
             }
             with st.spinner("Construindo arquivo..."):
-                st.session_state.pptx_gerado = processar_apresentacao(template_upload, mapa, atividades_lista, "Técnica", None, qtd_meses_projeto)
+                st.session_state.pptx_gerado, avisos = processar_apresentacao(
+                    template_upload, mapa, atividades_lista, "Técnica", None, qtd_meses_projeto
+                )
                 st.session_state.nome_arquivo = f"Tecnica_{st.session_state.memoria_geral['cliente']}.pptx"
+            for aviso in avisos:
+                st.warning(aviso)
             st.success("Técnica gerada com sucesso!")
             st.session_state.tentou_gerar = False
 
@@ -327,34 +256,35 @@ def render_tecnica():
         st.write("")
         st.button("Avançar para Proposta Comercial ➡️", on_click=ir_para, args=("📈 3. Proposta Comercial",))
 
+
 def render_comercial():
     st.title("📈 3. Gerador de Proposta Comercial")
     st.caption("A mágica acontece aqui: não é preciso digitar mais nada além das parcelas.")
-    
+
     with st.sidebar:
         st.markdown("---")
         template_upload = st.file_uploader("Suba o template (Comercial)", type="pptx")
 
     st.success("✅ Informações Gerais (Cliente, Justificativa, Prazos) carregadas da Técnica.")
-    
+
     with st.expander("💰 Configuração de Parcelamento", expanded=True):
         st.info("Os valores totais foram puxados diretamente do Motor de Precificação.")
         v_op1 = st.session_state.valores_finais["op1"]
         v_op2 = st.session_state.valores_finais["op2"]
-        
+
         st.markdown(f"**Total Investimento Técnico (OP1):** {formatar_moeda(v_op1)}")
         st.markdown(f"**Total Turnkey com Logística (OP2):** {formatar_moeda(v_op2)}")
-        
+
         st.write("---")
         qtd_parcelas = st.number_input("Quantidade de Parcelas ({{QTD_PARCELAS}})", min_value=1, value=12)
-        st.session_state.valores_finais["qtd_parcelas"] = qtd_parcelas # Salva na memória
+        st.session_state.valores_finais["qtd_parcelas"] = qtd_parcelas
 
     colA, colB = st.columns(2)
     colA.button("⬅️ Voltar para Técnica", on_click=ir_para, args=("📝 2. Proposta Técnica",))
-    
+
     def tentar_gerar_comercial():
         st.session_state.tentou_gerar = True
-        
+
     colB.button("🚀 VALIDAR E GERAR COMERCIAL", on_click=tentar_gerar_comercial, type="primary")
 
     if st.session_state.tentou_gerar:
@@ -362,16 +292,16 @@ def render_comercial():
             st.error("⚠️ Faça o upload do template da Comercial na barra lateral.")
         else:
             mapa_comercial = {
-                "{{SERVICO}}": st.session_state.memoria_geral["servico"], 
-                "{{CLIENTE}}": st.session_state.memoria_geral["cliente"], 
-                "{{UNIDADE}}": st.session_state.memoria_geral["unidade"], 
-                "{{NUM_PROP}}": st.session_state.memoria_geral["num_prop"], 
+                "{{SERVICO}}": st.session_state.memoria_geral["servico"],
+                "{{CLIENTE}}": st.session_state.memoria_geral["cliente"],
+                "{{UNIDADE}}": st.session_state.memoria_geral["unidade"],
+                "{{NUM_PROP}}": st.session_state.memoria_geral["num_prop"],
                 "{{ESCOPO}}": st.session_state.memoria_geral["escopo"],
                 "{{DATA}}": datetime.date.today().strftime("%d/%m/%Y"),
-                "{{JUSTIFICATIVA}}": st.session_state.memoria_geral["justificativa"], 
+                "{{JUSTIFICATIVA}}": st.session_state.memoria_geral["justificativa"],
                 "{{OBJETIVO}}": st.session_state.memoria_geral["objetivo"],
-                "{{PRAZO}}": st.session_state.memoria_geral["prazo"], 
-                "{{FORMATO}}": st.session_state.memoria_geral["formato"], 
+                "{{PRAZO}}": st.session_state.memoria_geral["prazo"],
+                "{{FORMATO}}": st.session_state.memoria_geral["formato"],
                 "{{IDIOMA}}": st.session_state.memoria_geral["idioma"],
                 "{{IDAS}}": str(st.session_state.memoria_geral["idas"]),
                 "{{VALOR_OP1}}": formatar_moeda(v_op1),
@@ -379,23 +309,27 @@ def render_comercial():
                 "{{VALOR_OP1_EXT}}": valor_por_extenso(v_op1),
                 "{{VALOR_OP2_EXT}}": valor_por_extenso(v_op2),
                 "{{QTD_PARCELAS}}": str(qtd_parcelas),
-                "{{VLR1_PARCELAS}}": formatar_moeda(v_op1/qtd_parcelas) if qtd_parcelas > 0 else "0",
-                "{{VLR2_PARCELAS}}": formatar_moeda(v_op2/qtd_parcelas) if qtd_parcelas > 0 else "0"
+                "{{VLR1_PARCELAS}}": formatar_moeda(v_op1 / qtd_parcelas) if qtd_parcelas > 0 else "0",
+                "{{VLR2_PARCELAS}}": formatar_moeda(v_op2 / qtd_parcelas) if qtd_parcelas > 0 else "0"
             }
-            
+
             acoes_auto = [{"nome": "Diagnóstico de Cultura e Intervenção", "v1": v_op1, "v2": v_op2}]
             dist_parcelas = calcular_amortizacao(qtd_parcelas)
-            
+
             dados_financeiros = {
-                'acoes': acoes_auto, 
-                'total_op1': v_op1, 
+                'acoes': acoes_auto,
+                'total_op1': v_op1,
                 'total_op2': v_op2,
                 'parcelas': dist_parcelas
             }
-            
+
             with st.spinner("Construindo arquivo..."):
-                st.session_state.pptx_gerado = processar_apresentacao(template_upload, mapa_comercial, [], "Comercial", dados_financeiros, 12)
+                st.session_state.pptx_gerado, avisos = processar_apresentacao(
+                    template_upload, mapa_comercial, [], "Comercial", dados_financeiros, 12
+                )
                 st.session_state.nome_arquivo = f"Comercial_{st.session_state.memoria_geral['cliente']}.pptx"
+            for aviso in avisos:
+                st.warning(aviso)
             st.success("Comercial gerada com sucesso!")
             st.session_state.tentou_gerar = False
 
