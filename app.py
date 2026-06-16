@@ -3,7 +3,7 @@ from ferramentas.utilidades import ir_para
 from ferramentas import estilo
 from modulos import dcs, pontual, handover
 
-st.set_page_config(page_title="Sistema Comportamento", layout="wide")
+st.set_page_config(page_title="Sistema Comportamento", layout="wide", initial_sidebar_state="expanded")
 estilo.aplicar_estilo()
 
 # =====================================================================
@@ -116,8 +116,7 @@ st.sidebar.radio(
 if st.session_state.current_page == "🏠 Início":
     st.markdown(
         '<div class="cpto-head">'
-        '<div class="cpto-eyebrow">Console de propostas</div>'
-        '<h1 class="cpto-title">Do cálculo ao PPTX, num fluxo só.</h1>'
+        '<h1 class="cpto-title">EMISSOR DE PROPOSTAS</h1>'
         '<p class="cpto-sub">Precifique com o racional à mostra, gere a proposta técnica '
         'e comercial e feche o handover para operações — os dados acompanham você em cada etapa.</p>'
         '</div>',
