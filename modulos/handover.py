@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from ferramentas.utilidades import formatar_moeda
+from ferramentas.gerar_pdf import gerar_pdf_handover
 
 
 def render_handover():
@@ -119,5 +120,23 @@ def render_handover():
     }
     st.table(pd.DataFrame(dados_logistica))
 
-    # Botão apenas visual para a aprovação futura
-    st.success("✅ Recibo pronto! Selecione o texto acima e copie para a sua planilha oficial ou salve a página em PDF.")
+    # --- GERAÇÃO DO RECIBO EM PDF ---
+    num_prop = memoria.get("num_prop", "")
+    cliente_nome = memoria.get("cliente", "")
+    subtitulo = "  •  ".join(
+        p for p in [cliente_nome, f"Proposta nº {num_prop}" if num_prop else ""] if p
+    )
+
+    pdf_bytes = gerar_pdf_handover(dados_tabela, dados_logistica, subtitulo=subtitulo)
+
+    nome_base = f"Recibo_{num_prop or 'projeto'}_{cliente_nome}".strip("_")
+    nome_arquivo = "".join(c if c.isalnum() or c in "-_" else "_" for c in nome_base) + ".pdf"
+
+    st.download_button(
+        "📄 Baixar Recibo em PDF",
+        data=pdf_bytes,
+        file_name=nome_arquivo,
+        mime="application/pdf",
+        type="primary",
+    )
+    st.success("✅ Recibo pronto! Baixe o PDF acima para anexar à planilha oficial ou enviar para Operações.")
