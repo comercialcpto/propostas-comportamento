@@ -123,10 +123,6 @@ def render_precificacao():
         st.markdown("#### 📝 Tabela de Prova Real (Resumo de Amostragem)")
         st.table(pd.DataFrame(dados_tabela_prova))
 
-    # Contador de modalidade (Presencial x Online). Fica logo abaixo da Prova Real,
-    # mas é preenchido após a Seção 3 — precisa do split das etapas do Plano Detalhado.
-    placeholder_modalidade = st.container()
-
     st.markdown("---")
     st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais)")
     st.info(
@@ -162,21 +158,20 @@ def render_precificacao():
     valor_parcial_fases = total_horas_fases * taxa_hora
     st.success(esc_md(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**."))
 
-    # --- Preenche o contador de modalidade (posicionado acima, sob a Prova Real) ---
+    # --- Contador de modalidade (Presencial x Online) ---
     # Todas as horas de campo são presenciais; somamos as etapas marcadas como presenciais.
     # O restante das horas (etapas não presenciais do Plano Detalhado) é online.
     horas_presenciais = total_horas_campo + horas_fases_presencial
     horas_online = horas_fases_online
-    with placeholder_modalidade:
-        st.markdown("#### ⏱️ Modalidade das Horas")
-        cm1, cm2 = st.columns(2)
-        cm1.metric("🟢 Horas Presenciais", f"{horas_presenciais} h")
-        cm2.metric("💻 Horas Online", f"{horas_online} h")
-        st.caption(
-            "Presenciais = todas as horas de campo (H&M, entrevistas, grupos focais, OAC, visitas "
-            "técnicas e aprofundamento) + etapas do Plano Detalhado marcadas como presenciais. "
-            "Online = etapas do Plano Detalhado não marcadas como presenciais."
-        )
+    st.markdown("#### ⏱️ Modalidade das Horas")
+    cm1, cm2 = st.columns(2)
+    cm1.metric("🟢 Horas Presenciais", f"{horas_presenciais} h")
+    cm2.metric("💻 Horas Online", f"{horas_online} h")
+    st.caption(
+        "Presenciais = todas as horas de campo (H&M, entrevistas, grupos focais, OAC, visitas "
+        "técnicas e aprofundamento) + etapas do Plano Detalhado marcadas como presenciais. "
+        "Online = etapas do Plano Detalhado não marcadas como presenciais."
+    )
 
     st.markdown("---")
     st.markdown("### 💰 4. Precificação Final e Logística")
