@@ -66,8 +66,23 @@ def render_precificacao():
             amostra_operacional = max(0, amostra_total - amostra_lideres)
 
             turmas_hm = math.floor(amostra_lideres / config.TAMANHO_TURMA)
-            entrevistas = amostra_lideres % config.TAMANHO_TURMA
+            entrevistas_base = amostra_lideres % config.TAMANHO_TURMA
             turmas_foco = math.ceil(amostra_operacional / config.TAMANHO_TURMA)
+
+            # Calibragem das entrevistas para nunca fechar com meia-hora.
+            # Cada entrevista vale 1,5h: nº PAR de entrevistas => horas inteiras;
+            # nº ÍMPAR => sobra 0,5h. Quando der ímpar, ajustamos +1 (preferencial,
+            # mantém a amostra >= exigida) ou -1 quando não há mais líderes disponíveis
+            # (a amostra já cobre todos os líderes da unidade).
+            entrevistas = entrevistas_base
+            ajuste_entrevistas = 0
+            if entrevistas_base % 2 == 1:
+                if amostra_lideres < und['lideres']:
+                    entrevistas = entrevistas_base + 1
+                    ajuste_entrevistas = 1
+                else:
+                    entrevistas = entrevistas_base - 1
+                    ajuste_entrevistas = -1
 
             horas_hm = turmas_hm * config.HORAS_POR_TURMA
             horas_foco = turmas_foco * config.HORAS_POR_TURMA
@@ -93,13 +108,19 @@ def render_precificacao():
                 "Amostra Base (Het. 8%)": amostra_total,
                 "Pop. Líderes": und['lideres'],
                 "Amostra Líderes (Hom. 5%)": amostra_lideres,
-                "Total Horas Campo": f"{total_horas_unidade} h"
+                "Total Horas Campo": f"{total_horas_unidade:g} h"
             })
 
             with st.expander(f"📌 Racional de Cálculo: {und['nome']}", expanded=False):
                 st.write(f"**1. Liderança:** Dos {und['lideres']} líderes, a amostra exigida é de **{amostra_lideres} pessoas**.")
                 st.write(f"↳ Formaremos **{turmas_hm} turmas de Hearts & Minds** de {config.TAMANHO_TURMA} pessoas (*{turmas_hm} turmas x {config.HORAS_POR_TURMA}h = {horas_hm}h*).")
-                st.write(f"↳ O saldo de **{entrevistas} líderes** farão **Entrevistas Individuais** (*{entrevistas} pessoas x {config.HORAS_POR_ENTREVISTA}h = {horas_entrevistas}h*).")
+                st.write(f"↳ Realizaremos **{entrevistas} Entrevistas Individuais** com o saldo de líderes (*{entrevistas} × {config.HORAS_POR_ENTREVISTA}h = {horas_entrevistas:g}h*).")
+                if ajuste_entrevistas != 0:
+                    direcao = "para cima (+1)" if ajuste_entrevistas > 0 else "para baixo (−1)"
+                    st.caption(
+                        f"⚖️ Calibragem: o saldo estatístico era de {entrevistas_base} entrevista(s) "
+                        f"(fecharia em meia-hora). Ajustamos {direcao} para {entrevistas}, mantendo o total em horas cheias."
+                    )
 
                 st.write(f"**2. Base Operacional:** População de {und['pop_total'] - und['lideres']} pessoas, resultando na amostra restante de **{amostra_operacional} pessoas**.")
                 st.write(f"↳ Formaremos **{turmas_foco} Grupos Focais** de até {config.TAMANHO_TURMA} pessoas (*{turmas_foco} turmas x {config.HORAS_POR_TURMA}h = {horas_foco}h*).")
@@ -114,9 +135,9 @@ def render_precificacao():
                     )
 
                 st.success(
-                    f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas}h (Entrevistas) + "
+                    f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas:g}h (Entrevistas) + "
                     f"{horas_foco}h (Grupos Focais) + {horas_manuais}h (Atividades Manuais) = "
-                    f"**{total_horas_unidade} horas**."
+                    f"**{total_horas_unidade:g} horas**."
                 )
 
     if dados_tabela_prova:
@@ -165,8 +186,8 @@ def render_precificacao():
     horas_online = horas_fases_online
     st.markdown("#### ⏱️ Modalidade das Horas")
     cm1, cm2 = st.columns(2)
-    cm1.metric("🟢 Horas Presenciais", f"{horas_presenciais} h")
-    cm2.metric("💻 Horas Online", f"{horas_online} h")
+    cm1.metric("🟢 Horas Presenciais", f"{horas_presenciais:g} h")
+    cm2.metric("💻 Horas Online", f"{horas_online:g} h")
     st.caption(
         "Presenciais = todas as horas de campo (H&M, entrevistas, grupos focais, OAC, visitas "
         "técnicas e aprofundamento) + etapas do Plano Detalhado marcadas como presenciais. "
@@ -195,7 +216,7 @@ def render_precificacao():
     st.session_state.valores_finais["horas_presenciais"] = horas_presenciais
     st.session_state.valores_finais["horas_online"] = horas_online
 
-    st.write(f"**Racional da Precificação Técnica:** {total_horas_campo}h (Campo) + {total_horas_fases}h (Plano Detalhado) = **{horas_totais} horas totais de projeto**.")
+    st.write(f"**Racional da Precificação Técnica:** {total_horas_campo:g}h (Campo) + {total_horas_fases:g}h (Plano Detalhado) = **{horas_totais:g} horas totais de projeto**.")
 
     c_tot1, c_tot2 = st.columns(2)
     c_tot1.metric("Total OP1 (Serviço Técnico)", formatar_moeda(valor_op1))
