@@ -58,16 +58,19 @@ if 'current_page' not in st.session_state:
 
 # --- Memória DCS ---
 if 'unidades_dcs' not in st.session_state:
-    st.session_state.unidades_dcs = [{"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0}]
+    st.session_state.unidades_dcs = [
+        {"id": 0, "nome": "Unidade Matriz", "pop_total": 0, "lideres": 0,
+         "oac": 0, "visitas": 0, "aprofundamento": 0}
+    ]
 
 if 'fases_dcs' not in st.session_state:
     st.session_state.fases_dcs = [
-        {"id": 0, "nome": "Planejamento / Reunião de Abertura", "horas": 4},
-        {"id": 1, "nome": "Workshop - Gestão de Cultura de Segurança", "horas": 2},
-        {"id": 2, "nome": "Elaboração do Relatório", "horas": 56},
-        {"id": 3, "nome": "Apresentação dos Resultados", "horas": 4},
-        {"id": 4, "nome": "Plano de Transformação Cultural (PTC)", "horas": 12},
-        {"id": 5, "nome": "Suporte e Acompanhamento", "horas": 64}
+        {"id": 0, "nome": "Planejamento / Reunião de Abertura", "horas": 4, "presencial": False},
+        {"id": 1, "nome": "Workshop - Gestão de Cultura de Segurança", "horas": 2, "presencial": False},
+        {"id": 2, "nome": "Elaboração do Relatório", "horas": 56, "presencial": False},
+        {"id": 3, "nome": "Apresentação dos Resultados", "horas": 4, "presencial": False},
+        {"id": 4, "nome": "Plano de Transformação Cultural (PTC)", "horas": 12, "presencial": False},
+        {"id": 5, "nome": "Suporte e Acompanhamento", "horas": 64, "presencial": False}
     ]
 
 # --- Memória Pontual ---
