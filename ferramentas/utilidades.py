@@ -130,7 +130,8 @@ def ir_para(pagina):
 def adicionar_unidade():
     novo_id = len(st.session_state.unidades_dcs)
     st.session_state.unidades_dcs.append(
-        {"id": novo_id, "nome": f"Nova Unidade {novo_id+1}", "pop_total": 0, "lideres": 0}
+        {"id": novo_id, "nome": f"Nova Unidade {novo_id+1}", "pop_total": 0, "lideres": 0,
+         "oac": 0, "visitas": 0, "aprofundamento": 0}
     )
 
 
@@ -143,7 +144,9 @@ def remover_unidade(id_remover):
 
 def adicionar_fase():
     novo_id = max([f['id'] for f in st.session_state.fases_dcs], default=-1) + 1
-    st.session_state.fases_dcs.append({"id": novo_id, "nome": "Nova Etapa", "horas": 0})
+    st.session_state.fases_dcs.append(
+        {"id": novo_id, "nome": "Nova Etapa", "horas": 0, "presencial": False}
+    )
 
 
 def remover_fase(id_remover):
