@@ -14,7 +14,12 @@ Uso no app.py:
     estilo.cabecalho("Precificação", "...", etapa="Etapa 1")
     estilo.marca_sidebar()
 """
+import os
 import streamlit as st
+
+# Logo opcional. Coloque o PNG (branco, fundo transparente) em assets/.
+# Se o arquivo não existir, cai no texto "Comportamento." automaticamente.
+LOGO_PATH = "assets/logo_comportamento.png"
 
 _CSS = """
 <style>
@@ -34,25 +39,22 @@ _CSS = """
   --ease:cubic-bezier(.2,.7,.2,1.2);
 }
 
-/* ---- Canvas e chrome ---- */
+/* ---- Canvas e chrome ----
+   IMPORTANTE: NÃO esconder o stToolbar inteiro — o botão de reexpandir a
+   sidebar (stExpandSidebarButton) é FILHO dele. Escondemos só o ruído. */
 .stApp{ background:var(--canvas); }
-[data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer{ display:none !important; }
+[data-testid="stDecoration"]{ display:none !important; }
+#MainMenu, [data-testid="stMainMenuButton"]{ display:none !important; }
+footer{ display:none !important; }
 header[data-testid="stHeader"]{ background:transparent; }
+[data-testid="stToolbar"]{ background:transparent; }
 [data-testid="stMainBlockContainer"]{ max-width:1240px; padding-top:2.2rem; padding-bottom:4rem; }
 
-/* ---- FIX: controle de recolher/expandir a sidebar SEMPRE visível e clicável ----
-   (cobre os nomes atuais e legados de testid entre versões do Streamlit) */
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"]{
-  display:flex !important; visibility:visible !important; opacity:1 !important;
-  z-index:1000000 !important; pointer-events:auto !important;
-}
-[data-testid="stSidebarCollapsedControl"] button,
-[data-testid="collapsedControl"] button,
-[data-testid="stSidebarCollapseButton"],
-[data-testid="stSidebarCollapseButton"] button{
+/* Botões de recolher/expandir a sidebar SEMPRE visíveis e clicáveis */
+[data-testid="stExpandSidebarButton"], [data-testid="stExpandSidebarButton"] button,
+[data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapseButton"] button{
   display:inline-flex !important; visibility:visible !important; opacity:1 !important;
-  pointer-events:auto !important; color:var(--ink) !important;
+  pointer-events:auto !important; z-index:1000000 !important; color:var(--ink) !important;
 }
 
 /* ---- Tipografia ---- */
@@ -75,6 +77,7 @@ hr{ border:none; border-top:1px solid var(--line); margin:1.4rem 0; }
 /* ---- Sidebar ---- */
 [data-testid="stSidebar"]{ border-right:1px solid var(--line); }
 [data-testid="stSidebar"] > div{ padding-top:1.4rem; }
+[data-testid="stSidebar"] [data-testid="stImage"]{ margin:.1rem 0 .5rem; }
 .cpto-brand{ padding:0 .35rem 1.1rem; }
 .cpto-brand .mark{
   font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:1.05rem;
@@ -197,12 +200,17 @@ def cabecalho(titulo, subtitulo=None, etapa=None):
 
 
 def marca_sidebar(navlabel="Etapas do projeto"):
-    """Cabeçalho de marca da barra lateral + rótulo da navegação."""
+    """Logo da marca na barra lateral (com fallback para texto) + rótulo da nav."""
+    if os.path.exists(LOGO_PATH):
+        st.sidebar.image(LOGO_PATH, width=185)
+    else:
+        st.sidebar.markdown(
+            '<div class="cpto-brand"><div class="mark">Comportamento<span class="dot">.</span></div></div>',
+            unsafe_allow_html=True,
+        )
     st.sidebar.markdown(
-        '<div class="cpto-brand">'
-        '<div class="mark">Comportamento<span class="dot">.</span></div>'
-        '<div class="tag">Precificação & Propostas</div>'
-        '</div>'
+        '<div class="cpto-brand" style="padding:.35rem .35rem 1.05rem;">'
+        '<div class="tag">Precificação & Propostas</div></div>'
         f'<div class="cpto-navlabel">{navlabel}</div>',
         unsafe_allow_html=True,
     )
