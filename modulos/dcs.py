@@ -14,6 +14,10 @@ from ferramentas import config
 def render_precificacao():
     # O router já garante que só chegamos aqui no serviço de Diagnóstico.
     st.markdown("### 📊 1. Cadastro de População e Unidades")
+    st.caption(
+        "Para cada unidade: população e líderes (entram no cálculo amostral) e as atividades "
+        "manuais — OAC, Visitas Técnicas e Aprofundamento — que somam horas presenciais de campo."
+    )
 
     for i, und in enumerate(st.session_state.unidades_dcs):
         c1, c2, c3, c4 = st.columns([0.4, 0.2, 0.2, 0.2])
@@ -25,6 +29,22 @@ def render_precificacao():
             if c4.button("🗑️ Remover", key=f"rem_{und['id']}"):
                 remover_unidade(und['id'])
                 st.rerun()
+
+        # Atividades manuais desta unidade (somam às horas de campo, todas presenciais).
+        # .get() protege unidades antigas em sessão que ainda não tenham as chaves novas.
+        m1, m2, m3 = st.columns(3)
+        und['oac'] = m1.number_input(
+            f"OAC (× {config.HORAS_POR_OAC}h)", min_value=0,
+            value=und.get('oac', 0), key=f"oac_{und['id']}"
+        )
+        und['visitas'] = m2.number_input(
+            f"Visitas Técnicas (× {config.HORAS_POR_VISITA}h)", min_value=0,
+            value=und.get('visitas', 0), key=f"vis_{und['id']}"
+        )
+        und['aprofundamento'] = m3.number_input(
+            f"Atividades de Aprofundamento (× {config.HORAS_POR_APROFUNDAMENTO}h)", min_value=0,
+            value=und.get('aprofundamento', 0), key=f"apr_{und['id']}"
+        )
 
     st.button("➕ Adicionar Unidade / Área", on_click=adicionar_unidade)
 
@@ -53,7 +73,17 @@ def render_precificacao():
             horas_foco = turmas_foco * config.HORAS_POR_TURMA
             horas_entrevistas = entrevistas * config.HORAS_POR_ENTREVISTA
 
-            total_horas_unidade = horas_hm + horas_foco + horas_entrevistas
+            # Atividades manuais desta unidade (cadastradas na Seção 1).
+            qtd_oac = und.get('oac', 0)
+            qtd_visitas = und.get('visitas', 0)
+            qtd_aprof = und.get('aprofundamento', 0)
+
+            horas_oac = qtd_oac * config.HORAS_POR_OAC
+            horas_visitas = qtd_visitas * config.HORAS_POR_VISITA
+            horas_aprof = qtd_aprof * config.HORAS_POR_APROFUNDAMENTO
+            horas_manuais = horas_oac + horas_visitas + horas_aprof
+
+            total_horas_unidade = horas_hm + horas_foco + horas_entrevistas + horas_manuais
             total_horas_campo += total_horas_unidade
             total_amostra += amostra_total
 
@@ -74,26 +104,56 @@ def render_precificacao():
                 st.write(f"**2. Base Operacional:** População de {und['pop_total'] - und['lideres']} pessoas, resultando na amostra restante de **{amostra_operacional} pessoas**.")
                 st.write(f"↳ Formaremos **{turmas_foco} Grupos Focais** de até {config.TAMANHO_TURMA} pessoas (*{turmas_foco} turmas x {config.HORAS_POR_TURMA}h = {horas_foco}h*).")
 
-                st.success(f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas}h (Entrevistas) + {horas_foco}h (Grupos Focais) = **{total_horas_unidade} horas**.")
+                if horas_manuais > 0:
+                    st.write(
+                        f"**3. Atividades Manuais (presenciais):** "
+                        f"OAC (*{qtd_oac} × {config.HORAS_POR_OAC}h = {horas_oac}h*) · "
+                        f"Visitas Técnicas (*{qtd_visitas} × {config.HORAS_POR_VISITA}h = {horas_visitas}h*) · "
+                        f"Aprofundamento (*{qtd_aprof} × {config.HORAS_POR_APROFUNDAMENTO}h = {horas_aprof}h*) "
+                        f"= **{horas_manuais}h**."
+                    )
+
+                st.success(
+                    f"**Total de horas desta unidade:** {horas_hm}h (H&M) + {horas_entrevistas}h (Entrevistas) + "
+                    f"{horas_foco}h (Grupos Focais) + {horas_manuais}h (Atividades Manuais) = "
+                    f"**{total_horas_unidade} horas**."
+                )
 
     if dados_tabela_prova:
         st.markdown("#### 📝 Tabela de Prova Real (Resumo de Amostragem)")
         st.table(pd.DataFrame(dados_tabela_prova))
 
+    # Contador de modalidade (Presencial x Online). Fica logo abaixo da Prova Real,
+    # mas é preenchido após a Seção 3 — precisa do split das etapas do Plano Detalhado.
+    placeholder_modalidade = st.container()
+
     st.markdown("---")
     st.markdown("### 📋 3. Plano Detalhado (Etapas Adicionais)")
-    st.info("Personalize as etapas fixas e operacionais do projeto. As horas cadastradas aqui serão somadas à coleta de campo.")
+    st.info(
+        "Personalize as etapas fixas e operacionais do projeto. As horas cadastradas aqui serão "
+        "somadas à coleta de campo. Marque **Presencial?** nas etapas que acontecem presencialmente "
+        "— as demais entram como horas online."
+    )
 
     taxa_hora = st.number_input("Valor da Hora Técnica (R$)", min_value=0.0,
                                 value=config.TAXA_HORA_PADRAO, step=10.0, key="taxa_hora_topo")
 
     total_horas_fases = 0
+    horas_fases_presencial = 0
+    horas_fases_online = 0
     for fase in st.session_state.fases_dcs:
-        f1, f2, f3 = st.columns([0.6, 0.2, 0.2])
+        f1, f2, f3, f4 = st.columns([0.46, 0.18, 0.18, 0.18])
         fase['nome'] = f1.text_input("Nome da Etapa", value=fase['nome'], key=f"fnome_{fase['id']}")
         fase['horas'] = f2.number_input("Carga Horária (h)", min_value=0, value=fase['horas'], key=f"fhoras_{fase['id']}")
+        fase['presencial'] = f3.checkbox("Presencial?", value=fase.get('presencial', False), key=f"fpres_{fase['id']}")
+
         total_horas_fases += fase['horas']
-        if f3.button("🗑️ Remover", key=f"frem_{fase['id']}"):
+        if fase['presencial']:
+            horas_fases_presencial += fase['horas']
+        else:
+            horas_fases_online += fase['horas']
+
+        if f4.button("🗑️ Remover", key=f"frem_{fase['id']}"):
             remover_fase(fase['id'])
             st.rerun()
 
@@ -101,6 +161,22 @@ def render_precificacao():
 
     valor_parcial_fases = total_horas_fases * taxa_hora
     st.success(esc_md(f"**Racional do Plano Detalhado:** A soma resultou em **{total_horas_fases} horas cadastradas**. \n\nCálculo de Custos: {total_horas_fases} horas x Hora de {formatar_moeda(taxa_hora)} = **{formatar_moeda(valor_parcial_fases)}**."))
+
+    # --- Preenche o contador de modalidade (posicionado acima, sob a Prova Real) ---
+    # Todas as horas de campo são presenciais; somamos as etapas marcadas como presenciais.
+    # O restante das horas (etapas não presenciais do Plano Detalhado) é online.
+    horas_presenciais = total_horas_campo + horas_fases_presencial
+    horas_online = horas_fases_online
+    with placeholder_modalidade:
+        st.markdown("#### ⏱️ Modalidade das Horas")
+        cm1, cm2 = st.columns(2)
+        cm1.metric("🟢 Horas Presenciais", f"{horas_presenciais} h")
+        cm2.metric("💻 Horas Online", f"{horas_online} h")
+        st.caption(
+            "Presenciais = todas as horas de campo (H&M, entrevistas, grupos focais, OAC, visitas "
+            "técnicas e aprofundamento) + etapas do Plano Detalhado marcadas como presenciais. "
+            "Online = etapas do Plano Detalhado não marcadas como presenciais."
+        )
 
     st.markdown("---")
     st.markdown("### 💰 4. Precificação Final e Logística")
@@ -121,6 +197,8 @@ def render_precificacao():
     st.session_state.valores_finais["op2"] = valor_op2
     st.session_state.valores_finais["horas_totais"] = horas_totais
     st.session_state.valores_finais["taxa_hora"] = taxa_hora
+    st.session_state.valores_finais["horas_presenciais"] = horas_presenciais
+    st.session_state.valores_finais["horas_online"] = horas_online
 
     st.write(f"**Racional da Precificação Técnica:** {total_horas_campo}h (Campo) + {total_horas_fases}h (Plano Detalhado) = **{horas_totais} horas totais de projeto**.")
 
