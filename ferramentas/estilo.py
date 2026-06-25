@@ -13,6 +13,7 @@ Uso no app.py:
     estilo.aplicar_estilo()                 # logo após set_page_config
     estilo.cabecalho("Precificação", "...", etapa="Etapa 1")
     estilo.marca_sidebar()
+    estilo.card_servico(card, disponivel)   # cartões da home
 """
 import os
 import streamlit as st
@@ -73,6 +74,41 @@ hr{ border:none; border-top:1px solid var(--line); margin:1.4rem 0; }
 }
 .cpto-title{ margin:0; font-size:1.9rem; font-weight:700; color:var(--ink); }
 .cpto-sub{ color:var(--slate); margin:.45rem 0 0; font-size:.97rem; max-width:62ch; }
+
+/* ---- Home: cabeçalho central + grade de serviços ---- */
+.cpto-home-head{ text-align:center; margin:.4rem 0 2.2rem; }
+.cpto-home-head .cpto-eyebrow{ margin-bottom:.55rem; }
+.cpto-home-head h1{
+  margin:0; font-size:2.4rem; font-weight:700; letter-spacing:-.02em; color:var(--ink);
+}
+.cpto-home-head p{ color:var(--slate); margin:.7rem auto 0; max-width:52ch; font-size:1rem; }
+
+.cpto-card{
+  display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:1rem; padding:1.25rem 1.2rem 1.2rem; min-height:186px;
+  transition:border-color .16s ease, transform .16s var(--ease), box-shadow .16s ease;
+}
+.cpto-card:not(.cpto-card--soon):hover{
+  border-color:var(--accent); transform:translateY(-2px);
+  box-shadow:0 12px 28px rgba(0,0,0,.35);
+}
+.cpto-card--soon{ opacity:.55; }
+.cpto-card-ic{
+  width:46px; height:46px; display:grid; place-items:center; border-radius:.78rem;
+  background:var(--accent-wash); color:var(--accent-bright); margin-bottom:.95rem;
+}
+.cpto-card--soon .cpto-card-ic{ background:rgba(141,164,185,.10); color:var(--slate); }
+.cpto-card-ic svg{ width:23px; height:23px; }
+.cpto-card h3{ font-size:1.02rem; font-weight:600; margin:0 0 .35rem; line-height:1.25; color:var(--ink); }
+.cpto-card p{ color:var(--slate); font-size:.86rem; line-height:1.45; margin:0; }
+.cpto-pill{ margin-top:auto; padding-top:1rem; }
+.cpto-pill span{
+  font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:.66rem;
+  letter-spacing:.14em; text-transform:uppercase; padding:.34rem .72rem;
+  border-radius:999px; display:inline-block;
+  color:var(--slate); background:rgba(141,164,185,.08); border:1px solid rgba(141,164,185,.22);
+}
 
 /* ---- Sidebar ---- */
 [data-testid="stSidebar"]{ border-right:1px solid var(--line); }
@@ -183,6 +219,47 @@ hr{ border:none; border-top:1px solid var(--line); margin:1.4rem 0; }
 </style>
 """
 
+# SVGs dos cartões da home (line icons, herdam a cor do contêiner .cpto-card-ic).
+ICONES_SERVICO = {
+    "dcs": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>'
+        '<path d="M11 8v6M8 11h6"/></svg>'
+    ),
+    "mpl": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="9" cy="9" r="3.2"/><path d="M3 20v-0.5a6 6 0 0 1 12 0V20"/>'
+        '<g transform="translate(14.5 1.2) scale(0.36)" stroke="none" fill="currentColor">'
+        '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 '
+        '6.91-1.01L12 2z"/></g></svg>'
+    ),
+    "clima": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z"/></svg>'
+    ),
+    "workshop": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<rect x="9" y="2" width="6" height="11" rx="3"/>'
+        '<path d="M5 10v2a7 7 0 0 0 14 0v-2"/><path d="M12 19v3"/><path d="M8 22h8"/></svg>'
+    ),
+    "ativadores": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M2 5a2 2 0 0 1 2-2h6v16H4a2 2 0 0 0-2 2V5z"/>'
+        '<path d="M22 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5z"/></svg>'
+    ),
+    "outros": (
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+        '<path d="M14 2v6h6M9 13h6M9 17h6"/></svg>'
+    ),
+}
+
 
 def aplicar_estilo():
     """Injeta a identidade visual. Chamar UMA vez, logo após set_page_config."""
@@ -212,5 +289,25 @@ def marca_sidebar(navlabel="Etapas do projeto"):
         '<div class="cpto-brand" style="padding:.35rem .35rem 1.05rem;">'
         '<div class="tag">Precificação & Propostas</div></div>'
         f'<div class="cpto-navlabel">{navlabel}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def card_servico(card, disponivel):
+    """Renderiza o corpo de um cartão de serviço da home.
+
+    Cartões 'Construir' (disponivel=True) recebem o botão de ação no app.py,
+    logo abaixo deste corpo. Cartões 'Em breve' já trazem o selo embutido.
+    """
+    icone = ICONES_SERVICO.get(card.get("icone", ""), "")
+    modificador = "" if disponivel else " cpto-card--soon"
+    selo = "" if disponivel else '<div class="cpto-pill"><span>Em breve</span></div>'
+    st.markdown(
+        f'<div class="cpto-card{modificador}">'
+        f'<div class="cpto-card-ic">{icone}</div>'
+        f'<h3>{card.get("titulo", "")}</h3>'
+        f'<p>{card.get("subtitulo", "")}</p>'
+        f'{selo}'
+        f'</div>',
         unsafe_allow_html=True,
     )
