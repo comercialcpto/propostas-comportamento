@@ -26,6 +26,53 @@ SERVICOS = {
     },
 }
 
+# =====================================================================
+# CARTÕES DA HOME (vitrine de serviços)
+# ---------------------------------------------------------------------
+# Cada cartão é puramente visual; quando tem 'servico' apontando para uma
+# entrada DISPONÍVEL do SERVICOS acima, ele vira "Construir" e clicar leva
+# direto à Precificação daquele serviço. Caso contrário, fica "Em breve".
+#
+# Lever opcional por cartão:
+#   "forcar": "em_breve"  -> trava como "Em breve" mesmo com o módulo pronto
+#   "forcar": "construir" -> força "Construir" (use SÓ se o módulo existir;
+#                            senão o botão cai no aviso "em desenvolvimento")
+#
+# 'icone' referencia ferramentas/estilo.ICONES_SERVICO.
+# =====================================================================
+CARDS_HOME = [
+    {"id": "dcs", "icone": "dcs",
+     "titulo": "Diagnóstico de Cultura de Segurança",
+     "subtitulo": "DCS — Hearts & Minds, Plano de Transformação Cultural",
+     "servico": "Diagnóstico (DCS/Clima/DCMA)"},
+
+    {"id": "mpl", "icone": "mpl",
+     "titulo": "Mapeamento de Perfil de Liderança",
+     "subtitulo": "MPL — Desenvolvimento individual e coletivo da liderança",
+     "servico": "Mapeamento de Liderança (MPL)"},  # módulo ainda não existe -> Em breve
+
+    {"id": "clima", "icone": "clima",
+     "titulo": "Diagnóstico de Clima de Segurança",
+     "subtitulo": "Pesquisa de Valência — PREVACC",
+     "servico": None},
+
+    {"id": "workshop", "icone": "workshop",
+     "titulo": "Workshop & Palestra",
+     "subtitulo": "Formações pontuais e eventos",
+     "servico": "Proposta Pontual (Palestras/Workshops)",
+     "forcar": "em_breve"},  # módulo Pontual JÁ existe; remova esta linha p/ liberar
+
+    {"id": "ativadores", "icone": "ativadores",
+     "titulo": "Gestão de Ativadores",
+     "subtitulo": "Mapeamento comportamental",
+     "servico": None},
+
+    {"id": "outros", "icone": "outros",
+     "titulo": "Outros Projetos",
+     "subtitulo": "Mentorias e personalizados",
+     "servico": None},
+]
+
 # Rótulos limpos para a navegação (o VALOR continua sendo a string original,
 # para não quebrar as referências a current_page espalhadas nos módulos).
 PAGINAS = {
@@ -46,6 +93,21 @@ def modulo_atual():
     if info and info["disponivel"]:
         return info["modulo"]
     return None
+
+
+def card_disponivel(card):
+    """Cartão é 'Construir' quando aponta para um serviço disponível (ou é forçado)."""
+    forcado = card.get("forcar")
+    if forcado in ("construir", "em_breve"):
+        return forcado == "construir"
+    serv = card.get("servico")
+    return bool(serv) and SERVICOS.get(serv, {}).get("disponivel", False)
+
+
+def abrir_servico(servico_key):
+    """Callback do cartão: seleciona o serviço e vai para a Precificação."""
+    st.session_state.servico_selecionado = servico_key
+    ir_para("💰 1. Precificação")
 
 
 # --- 1. INICIALIZAÇÃO DE VARIÁVEIS GLOBAIS (MEMÓRIA) ---
@@ -118,28 +180,29 @@ st.sidebar.radio(
 # --- 3. ROTEADOR DE PÁGINAS ---
 if st.session_state.current_page == "🏠 Início":
     st.markdown(
-        '<div class="cpto-head">'
-        '<h1 class="cpto-title">EMISSOR DE PROPOSTAS</h1>'
-        '<p class="cpto-sub">Precifique com o racional à mostra, gere a proposta técnica '
-        'e comercial e feche o handover para operações — os dados acompanham você em cada etapa.</p>'
+        '<div class="cpto-home-head">'
+        '<div class="cpto-eyebrow">Grupo Comportamento</div>'
+        '<h1>Gerador de Propostas</h1>'
+        '<p>Selecione o tipo de proposta para começar</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.2rem 0 1.6rem;">'
-        '<span class="cpto-step">1 · Precificação</span>'
-        '<span class="cpto-step">2 · Técnica</span>'
-        '<span class="cpto-step">3 · Comercial</span>'
-        '<span class="cpto-step">4 · Handover</span>'
-        '</div>'
-        "<style>.cpto-step{font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:600;"
-        "color:var(--slate);background:var(--surface);border:1px solid var(--line);"
-        "border-radius:.5rem;padding:.4rem .7rem;}</style>",
-        unsafe_allow_html=True,
-    )
-
-    st.button("Iniciar novo projeto", on_click=ir_para, args=("💰 1. Precificação",), type="primary")
+    for inicio in range(0, len(CARDS_HOME), 3):
+        colunas = st.columns(3, gap="medium")
+        for coluna, card in zip(colunas, CARDS_HOME[inicio:inicio + 3]):
+            with coluna:
+                disponivel = card_disponivel(card)
+                estilo.card_servico(card, disponivel)
+                if disponivel:
+                    st.button(
+                        "Construir",
+                        key=f"abrir_{card['id']}",
+                        type="primary",
+                        use_container_width=True,
+                        on_click=abrir_servico,
+                        args=(card["servico"],),
+                    )
 
 elif st.session_state.current_page == "💰 1. Precificação":
     estilo.cabecalho("Precificação", "Escolha o serviço e construa o investimento com o racional aberto.", etapa="Etapa 1")
